@@ -1,5 +1,5 @@
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, UTC
 import json
 import logging
 from typing import Dict, List
@@ -7,7 +7,7 @@ from app.models.enums import ResumeStatus
 from app.utils.text_extraction import extract_text
 from app.utils.hashing import compute_sha256
 from app.utils.validation import validate_text
-from app.core.config import COLLECTIONS_ROOT
+import app.core.config as config
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ def process_collection(company_id: str, collection_id: str) -> dict:
     logger.info(f"Processing collection {collection_id}")
     
     # 1. Resolve collection paths
-    collection_root = COLLECTIONS_ROOT / company_id / collection_id
+    collection_root = config.COLLECTIONS_ROOT / company_id / collection_id
     input_dir = collection_root / "input" / "raw"
     processed_dir = collection_root / "processed"
     reports_dir = collection_root / "reports"
@@ -139,7 +139,7 @@ def process_collection(company_id: str, collection_id: str) -> dict:
     meta = json.loads(meta_file.read_text()) if meta_file.exists() else {}
     meta.update({
         "processing_status": "completed",
-        "processed_at": datetime.utcnow().isoformat()
+        "processed_at": datetime.now(UTC).isoformat()
     })
     meta_file.write_text(json.dumps(meta, indent=2), encoding='utf-8')
     

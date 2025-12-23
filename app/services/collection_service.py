@@ -1,7 +1,7 @@
 import json
 import uuid
 import shutil
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from app.utils.filesystem import (
     resolve_collection_path,
@@ -64,7 +64,7 @@ def create_collection(company_id: str, zip_file) -> dict:
     metadata = {
         "collection_id": collection_id,
         "company_id": company_id,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "status": "uploaded",
         "format": "zip_only",
         "resume_count": resume_count

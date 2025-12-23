@@ -1,5 +1,5 @@
 from pathlib import Path
-import PyPDF2
+from pypdf import PdfReader
 from docx import Document
 
 def extract_text(file_path: Path) -> str:
@@ -29,7 +29,7 @@ def extract_text(file_path: Path) -> str:
 def _extract_pdf(file_path: Path) -> str:
     text = []
     with open(file_path, 'rb') as f:
-        reader = PyPDF2.PdfReader(f)
+        reader = PdfReader(f)
         for page in reader.pages:
             page_text = page.extract_text()
             if page_text:
