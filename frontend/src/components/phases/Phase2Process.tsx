@@ -28,7 +28,15 @@ export function Phase2Process() {
 
       // Fetch report to get stats
       const report = await getReport(collection_id, company_id)
-      const statsData = report.phase2.validation_report?.stats || {
+      // validation_report has stats at the top level (spread from stats object)
+      const validationReport = report.phase2.validation_report
+      const statsData = validationReport ? {
+        total_files: validationReport.total_files || 0,
+        ok: validationReport.ok || 0,
+        failed: validationReport.failed || 0,
+        empty: validationReport.empty || 0,
+        duplicate: validationReport.duplicate || 0,
+      } : {
         total_files: 0,
         ok: 0,
         failed: 0,

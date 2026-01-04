@@ -7,6 +7,7 @@ import app.core.config as config
 from app.core.errors import to_http_error
 import json
 from datetime import datetime, UTC
+from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/collections", tags=["collections"])
 
@@ -34,11 +35,34 @@ async def create_collection(
             content = await zip_file.read()
             f.write(content)
         
-        # Extract ZIP
+        # Extract ZIP (skip macOS resource fork files and other metadata)
         try:
             with zipfile.ZipFile(temp_zip, 'r') as zf:
-                # Extract all files
-                zf.extractall(raw_dir)
+                skipped_files = []
+                extracted_count = 0
+                for member in zf.namelist():
+                    # Skip macOS resource fork files (._*), .DS_Store, and other metadata
+                    if (member.startswith('._') or 
+                        member.endswith('/.DS_Store') or 
+                        member == '.DS_Store' or
+                        member == 'Thumbs.db' or
+                        member.startswith('~$')):
+                        skipped_files.append(member)
+                        continue
+                    # Skip directory entries
+                    if member.endswith('/'):
+                        continue
+                    # Extract file
+                    try:
+                        zf.extract(member, raw_dir)
+                        extracted_count += 1
+                    except Exception as e:
+                        # Log but continue with other files
+                        print(f"Warning: Failed to extract {member}: {e}")
+                        skipped_files.append(member)
+                
+                if skipped_files:
+                    print(f"Note: Skipped {len(skipped_files)} metadata/system files (e.g., macOS resource forks)")
         except zipfile.BadZipFile:
             # Clean up and raise error
             shutil.rmtree(collection_root)
@@ -48,10 +72,14 @@ async def create_collection(
             if temp_zip.exists():
                 temp_zip.unlink()
         
-        # Check if ZIP was empty
-        if not list(raw_dir.glob("*")):
+        # Check if ZIP was empty (after filtering)
+        valid_files = [f for f in raw_dir.rglob("*") 
+                      if f.is_file() 
+                      and not f.name.startswith('._')
+                      and f.name != '.DS_Store']
+        if not valid_files:
             shutil.rmtree(collection_root)
-            raise ValueError("ZIP file is empty")
+            raise ValueError("ZIP file is empty or contains no valid resume files")
         
         # Create collection metadata
         meta = {

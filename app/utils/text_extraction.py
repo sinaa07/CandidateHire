@@ -28,18 +28,37 @@ def extract_text(file_path: Path) -> str:
 
 def _extract_pdf(file_path: Path) -> str:
     text = []
-    with open(file_path, 'rb') as f:
-        reader = PdfReader(f)
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text.append(page_text)
-    return ' '.join(text).strip()
+    try:
+        with open(file_path, 'rb') as f:
+            reader = PdfReader(f)
+            if len(reader.pages) == 0:
+                raise ValueError("PDF has no pages")
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text and page_text.strip():
+                    text.append(page_text.strip())
+        result = ' '.join(text).strip()
+        # If result is empty or only whitespace, PDF might be image-based
+        if not result:
+            raise ValueError("PDF appears to be image-based (no extractable text). OCR required.")
+        return result
+    except Exception as e:
+        if "image-based" in str(e).lower() or "no extractable text" in str(e).lower():
+            raise
+        raise Exception(f"PDF extraction error: {str(e)}") from e
 
 def _extract_docx(file_path: Path) -> str:
-    doc = Document(file_path)
-    text = [paragraph.text for paragraph in doc.paragraphs]
-    return ' '.join(text).strip()
+    try:
+        doc = Document(file_path)
+        text = [paragraph.text.strip() for paragraph in doc.paragraphs if paragraph.text.strip()]
+        result = ' '.join(text).strip()
+        if not result:
+            raise ValueError("DOCX file appears to be empty or contains no extractable text")
+        return result
+    except Exception as e:
+        if "empty" in str(e).lower() or "no extractable text" in str(e).lower():
+            raise
+        raise Exception(f"DOCX extraction error: {str(e)}") from e
 
 def _extract_txt(file_path: Path) -> str:
     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
