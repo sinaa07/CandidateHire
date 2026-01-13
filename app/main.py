@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import collections_create, collections_process, collections_rank, collections_report
-from app.api.routes import collections_rank_file
+from app.api.routes import collections_rank_file, collections_rag
 app = FastAPI(
     title="CandidateHire API",
     description="Resume ranking and processing system",
@@ -23,6 +23,7 @@ app.include_router(collections_create.router)      # Phase 1 - create collection
 app.include_router(collections_process.router)     # Phase 2 - process
 app.include_router(collections_rank.router)        # Phase 3 - rank
 app.include_router(collections_report.router)      # Phase 4 - reports
+app.include_router(collections_rag.router)         # RAG - retrieval-augmented generation
 
 @app.get("/")
 async def root():
@@ -34,7 +35,10 @@ async def root():
             "process": "/collections/{id}/process (POST)",
             "rank": "/collections/{id}/rank (POST)",
             "report": "/collections/{id}/report (GET)",
-            "outputs": "/collections/{id}/outputs (GET)"
+            "outputs": "/collections/{id}/outputs (GET)",
+            "rag": "/collections/{id}/rag/query (POST)",
+            "rag_status": "/collections/{id}/rag/status (GET)",
+            "rag_stream": "/rag/stream/{task_id} (GET)"
         }
     }
 

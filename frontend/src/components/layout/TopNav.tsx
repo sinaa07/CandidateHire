@@ -20,7 +20,7 @@ export function TopNav() {
   const handleSelectCollection = (collection: Collection) => {
     setCollectionId(collection.id)
     setCompanyId(collection.company_id)
-    setPhase(1)
+    setPhase(4)
     setIsDropdownOpen(false)
   }
 
