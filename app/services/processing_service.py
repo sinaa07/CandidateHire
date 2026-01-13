@@ -101,8 +101,8 @@ def process_collection(company_id: str, collection_id: str) -> dict:
         reason = None
         
         try:
-            # Extract text
-            text = extract_text(resume_file)
+            # Extract text (with automatic OCR fallback for image-based PDFs)
+            text = extract_text(resume_file, use_ocr_fallback=True)
             
             # Validate text
             status = validate_text(text)

@@ -152,6 +152,8 @@ hire/
 2. Filter out metadata files (`._*`, `.DS_Store`, etc.)
 3. For each resume file:
    - Extract text (PDF/DOCX/TXT)
+     - **PDFs**: Regular extraction first, OCR fallback if text < threshold (100 chars)
+     - **DOCX/TXT**: Direct extraction
    - Validate text (not empty/whitespace)
    - Compute SHA-256 hash for duplicate detection
    - Save extracted text to `processed/{filename}.txt`
@@ -164,9 +166,15 @@ hire/
 - Route: `app/api/routes/collections_process.py`
 - Service: `app/services/processing_service.py`
 - Utils:
-  - `app/utils/text_extraction.py` - PDF/DOCX/TXT extraction
+  - `app/utils/text_extraction.py` - PDF/DOCX/TXT extraction (with OCR fallback)
+  - `app/utils/ocr_extraction.py` - OCR functionality for image-based PDFs
   - `app/utils/validation.py` - Text validation
   - `app/utils/hashing.py` - SHA-256 hashing
+
+**OCR Integration:**
+- Automatically uses OCR for image-based PDFs when regular extraction yields < 100 characters
+- No code changes needed - fully integrated into Phase 2
+- See `OCR_SETUP.md` for installation and configuration
 
 **Output:**
 - Extracted text files in `processed/`
