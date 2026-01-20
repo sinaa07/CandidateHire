@@ -41,33 +41,33 @@ export function ResultsTable({ candidates }: ResultsTableProps) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-white border border-[#E5E5E5] rounded-lg overflow-hidden shadow-card">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
+            <tr className="bg-[#F5F5F5] border-b border-[#E5E5E5]">
               {compareMode && <th className="px-4 py-3 text-left w-12" />}
               <th
                 onClick={() => setSortBy("rank")}
-                className="px-4 py-3 text-left font-semibold text-gray-900 cursor-pointer hover:bg-gray-100 w-16"
+                className="px-4 py-3 text-left font-semibold text-[#262626] cursor-pointer hover:bg-[#E5E5E5] w-16 transition-colors"
               >
                 Rank
               </th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-900 w-48">Filename</th>
+              <th className="px-4 py-3 text-left font-semibold text-[#262626] w-48">Filename</th>
               <th
                 onClick={() => setSortBy("score")}
-                className="px-4 py-3 text-left font-semibold text-gray-900 cursor-pointer hover:bg-gray-100 w-32"
+                className="px-4 py-3 text-left font-semibold text-[#262626] cursor-pointer hover:bg-[#E5E5E5] w-32 transition-colors"
               >
                 Score
               </th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-900">Matched Skills</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-900">Missing Skills</th>
+              <th className="px-4 py-3 text-left font-semibold text-[#262626]">Matched Skills</th>
+              <th className="px-4 py-3 text-left font-semibold text-[#262626]">Missing Skills</th>
             </tr>
           </thead>
           <tbody>
             {paginatedData.map((candidate, idx) => (
               <tr
                 key={candidate.filename}
-                className={`border-b border-gray-200 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-blue-50`}
+                className={`border-b border-[#E5E5E5] ${idx % 2 === 0 ? "bg-white" : "bg-[#F5F5F5]"} hover:bg-[#EEF2FF] transition-colors`}
               >
                 {compareMode && (
                   <td className="px-4 py-4 text-center">
@@ -78,17 +78,17 @@ export function ResultsTable({ candidates }: ResultsTableProps) {
                       disabled={
                         selectedForComparison.length >= 3 && !selectedForComparison.includes(candidate.filename)
                       }
-                      className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                      className="w-4 h-4 rounded border-[#E5E5E5] text-[#6366F1] focus:ring-[#6366F1] cursor-pointer"
                     />
                   </td>
                 )}
-                <td className="px-4 py-4 font-semibold text-gray-900">{candidate.rank}</td>
-                <td className="px-4 py-4 text-gray-700 text-sm" title={candidate.filename}>
+                <td className="px-4 py-4 font-semibold text-[#262626]">{candidate.rank}</td>
+                <td className="px-4 py-4 text-[#262626] text-sm font-mono" title={candidate.filename}>
                   {truncateFilename(candidate.filename)}
                 </td>
                 <td className="px-4 py-4">
                   <div
-                    className={`inline-block px-3 py-1 rounded font-semibold text-sm ${getScoreBgColor(
+                    className={`inline-block px-3 py-1 rounded-lg font-semibold text-sm ${getScoreBgColor(
                       candidate.final_score,
                     )} ${getScoreTextColor(candidate.final_score)}`}
                   >
@@ -100,7 +100,7 @@ export function ResultsTable({ candidates }: ResultsTableProps) {
                     {candidate.explainability.matched_skills.map((skill) => (
                       <span
                         key={skill}
-                        className="inline-block px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium"
+                        className="inline-block px-2 py-1 bg-[#ECFDF5] text-[#10B981] text-xs rounded-full font-medium border border-[#10B981]"
                       >
                         {skill}
                       </span>
@@ -112,7 +112,7 @@ export function ResultsTable({ candidates }: ResultsTableProps) {
                     {candidate.explainability.missing_skills.map((skill) => (
                       <span
                         key={skill}
-                        className="inline-block px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-medium"
+                        className="inline-block px-2 py-1 bg-[#FEE2E2] text-[#EF4444] text-xs rounded-full font-medium border border-[#EF4444]"
                       >
                         ⚠ {skill}
                       </span>
@@ -126,8 +126,8 @@ export function ResultsTable({ candidates }: ResultsTableProps) {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between bg-white border border-gray-200 rounded-lg p-4">
-        <div className="text-sm text-gray-600">
+      <div className="flex items-center justify-between bg-white border border-[#E5E5E5] rounded-lg p-4 shadow-card">
+        <div className="text-sm text-[#737373]">
           Showing {paginatedData.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to{" "}
           {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length}
         </div>
@@ -135,7 +135,7 @@ export function ResultsTable({ candidates }: ResultsTableProps) {
           <button
             onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
             disabled={currentPage === 1}
-            className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1 border border-[#E5E5E5] rounded-lg text-sm hover:bg-[#F5F5F5] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Previous
           </button>
@@ -143,8 +143,10 @@ export function ResultsTable({ candidates }: ResultsTableProps) {
             <button
               key={i + 1}
               onClick={() => setCurrentPage(i + 1)}
-              className={`px-3 py-1 rounded text-sm ${
-                currentPage === i + 1 ? "bg-blue-600 text-white" : "border border-gray-300 hover:bg-gray-50"
+              className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+                currentPage === i + 1
+                  ? "bg-[#6366F1] text-white"
+                  : "border border-[#E5E5E5] hover:bg-[#F5F5F5] text-[#262626]"
               }`}
             >
               {i + 1}
@@ -153,7 +155,7 @@ export function ResultsTable({ candidates }: ResultsTableProps) {
           <button
             onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
             disabled={currentPage === totalPages}
-            className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1 border border-[#E5E5E5] rounded-lg text-sm hover:bg-[#F5F5F5] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Next
           </button>

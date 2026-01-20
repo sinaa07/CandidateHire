@@ -83,30 +83,33 @@ export function Phase1Upload() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-12">
-      <h2 className="text-3xl font-bold text-gray-900 mb-8">Phase 1: Upload Resumes</h2>
+    <div className="max-w-3xl mx-auto px-6 py-12">
+      <div className="text-center mb-12">
+        <h2 className="text-4xl font-bold text-[#262626] mb-3">Upload Resume Collection</h2>
+        <p className="text-[#737373]">Upload your resume collection as a ZIP file</p>
+      </div>
 
       <div className="space-y-6">
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-2">Company ID</label>
+          <label className="block text-sm font-medium text-[#262626] mb-2">Company ID</label>
           <input
             type="text"
             value={companyId}
             onChange={handleCompanyIdChange}
             placeholder="Enter company ID (e.g., acme, techcorp)"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+            className="w-full px-4 py-3 border border-[#E5E5E5] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6366F1] focus:border-transparent bg-white"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-2">Resume Collection (ZIP File)</label>
+          <label className="block text-sm font-medium text-[#262626] mb-2">Resume Collection (ZIP File)</label>
           <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              dragActive ? "border-blue-600 bg-blue-50" : "border-gray-300 hover:border-gray-400"
+            className={`border-2 border-dashed rounded-lg p-12 text-center transition-all ${
+              dragActive ? "border-[#6366F1] bg-[#EEF2FF]" : "border-[#E5E5E5] hover:border-[#6366F1] bg-white"
             }`}
           >
             <input
@@ -117,35 +120,48 @@ export function Phase1Upload() {
               id="zip-upload"
             />
             <label htmlFor="zip-upload" className="cursor-pointer block">
-              <Upload size={32} className="mx-auto mb-2 text-gray-400" />
-              <p className="text-gray-700 font-medium">Drag and drop ZIP file here</p>
-              <p className="text-gray-500 text-sm">or click to browse</p>
-              <p className="text-gray-400 text-xs mt-2">Supported formats: .zip</p>
+              <Upload size={48} className={`mx-auto mb-4 ${dragActive ? "text-[#6366F1]" : "text-[#737373]"}`} />
+              <p className="text-[#262626] font-semibold text-lg mb-1">Drop ZIP or Browse</p>
+              <p className="text-[#737373] text-sm">Supported formats: .zip</p>
             </label>
           </div>
         </div>
 
         {zipFile && (
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <p className="text-sm text-gray-700">
-              📄 {zipFile.name} ({formatFileSize(zipFile.size)})
-            </p>
+          <div className="bg-white border border-[#E5E5E5] rounded-lg p-4 shadow-card">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#10B981] rounded-lg flex items-center justify-center">
+                  <span className="text-white text-xl">📦</span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#262626]">{zipFile.name}</p>
+                  <p className="text-xs text-[#737373]">{formatFileSize(zipFile.size)}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setZipFile(null)}
+                className="text-[#737373] hover:text-[#262626] transition-colors"
+              >
+                <AlertCircle size={20} />
+              </button>
+            </div>
           </div>
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-300 rounded-lg p-4 flex gap-3">
-            <AlertCircle size={20} className="text-red-600 flex-shrink-0" />
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="bg-[#FEE2E2] border border-[#EF4444] rounded-lg p-4 flex gap-3">
+            <AlertCircle size={20} className="text-[#EF4444] flex-shrink-0" />
+            <p className="text-sm text-[#DC2626]">{error}</p>
           </div>
         )}
 
         <button
           onClick={handleCreateCollection}
           disabled={!companyId.trim() || !zipFile || loading}
-          className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="w-full gradient-primary text-white py-4 rounded-lg font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-card hover:shadow-lg hover:-translate-y-0.5"
         >
-          {loading ? "Creating Collection..." : "Create Collection"}
+          {loading ? "Creating Collection..." : "Create Collection →"}
         </button>
       </div>
     </div>

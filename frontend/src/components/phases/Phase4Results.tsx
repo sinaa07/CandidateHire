@@ -77,41 +77,48 @@ export function Phase4Results() {
   }
 
   return (
-    <div className="px-6 py-8">
-      <h2 className="text-3xl font-bold text-gray-900 mb-8">Phase 4: Ranking Results</h2>
+    <div className="px-6 py-8 max-w-7xl mx-auto">
+      <div className="mb-8">
+        <h2 className="text-4xl font-bold text-[#262626] mb-2">Ranking Results</h2>
+        <p className="text-[#737373]">Review and compare top candidates</p>
+      </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-6 mb-8">
-        <div className="bg-white border border-gray-200 rounded-lg p-6 text-center">
-          <div className="text-4xl font-bold text-gray-900 mb-2">{summary.resume_count}</div>
-          <div className="text-gray-600">Candidates</div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white border border-[#E5E5E5] rounded-lg p-6 text-center shadow-card">
+          <div className="text-3xl font-bold text-[#262626] mb-1">{summary.resume_count}</div>
+          <div className="text-sm text-[#737373]">Total</div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-6 text-center">
-          <div className="text-4xl font-bold text-gray-900 mb-2">{formatScore(avgScore).replace("%", "")}</div>
-          <div className="text-gray-600">Avg Score</div>
+        <div className="bg-white border border-[#E5E5E5] rounded-lg p-6 text-center shadow-card">
+          <div className="text-3xl font-bold text-[#262626] mb-1">{candidates.length}</div>
+          <div className="text-sm text-[#737373]">Ranked</div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-6 text-center">
-          <div className="text-4xl font-bold text-gray-900 mb-2">{formatScore(topScore).replace("%", "")}</div>
-          <div className="text-gray-600">Top Score</div>
+        <div className="bg-white border border-[#E5E5E5] rounded-lg p-6 text-center shadow-card">
+          <div className="text-3xl font-bold text-[#262626] mb-1">{formatScore(avgScore).replace("%", "")}</div>
+          <div className="text-sm text-[#737373]">Avg Score</div>
+        </div>
+        <div className="bg-gradient-to-br from-[#6366F1] to-[#8B5CF6] rounded-lg p-6 text-center shadow-card text-white">
+          <div className="text-3xl font-bold mb-1">{formatScore(topScore).replace("%", "")}</div>
+          <div className="text-sm opacity-90">Top Score</div>
         </div>
       </div>
 
       {/* Action Bar */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6 flex items-center justify-between gap-4">
+      <div className="bg-white border border-[#E5E5E5] rounded-lg p-4 mb-6 flex items-center justify-between gap-4 shadow-card">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
             checked={compareMode}
             onChange={(e) => setCompareMode(e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300"
+            className="w-4 h-4 rounded border-[#E5E5E5] text-[#6366F1] focus:ring-[#6366F1]"
           />
-          <span className="text-sm font-medium text-gray-700">Compare Mode</span>
+          <span className="text-sm font-medium text-[#262626]">Compare Mode</span>
         </label>
 
         <div className="flex gap-2">
           <button
             onClick={() => setShowReRankModal(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 border border-[#E5E5E5] rounded-lg text-[#262626] hover:bg-[#F5F5F5] transition-colors"
           >
             <RotateCcw size={16} />
             Re-rank
@@ -124,9 +131,9 @@ export function Phase4Results() {
 
       {/* Results Table */}
       {error && (
-        <div className="bg-red-50 border border-red-300 rounded-lg p-4 mb-6 flex gap-3">
-          <AlertCircle size={20} className="text-red-600 flex-shrink-0" />
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="bg-[#FEE2E2] border border-[#EF4444] rounded-lg p-4 mb-6 flex gap-3">
+          <AlertCircle size={20} className="text-[#EF4444] flex-shrink-0" />
+          <p className="text-sm text-[#DC2626]">{error}</p>
         </div>
       )}
 

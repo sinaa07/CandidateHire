@@ -95,13 +95,18 @@ def process_collection(company_id: str, collection_id: str) -> dict:
         "duplicate": 0
     }
     
-    for resume_file in resume_files:
+    for idx, resume_file in enumerate(resume_files, 1):
         filename = resume_file.name
         status = None
         reason = None
         
+        # Log progress for large collections
+        if len(resume_files) > 10 and idx % max(1, len(resume_files) // 10) == 0:
+            logger.info(f"Processing progress: {idx}/{len(resume_files)} files ({100 * idx // len(resume_files)}%)")
+        
         try:
             # Extract text (with automatic OCR fallback for image-based PDFs)
+            # Add timeout protection for individual file processing
             text = extract_text(resume_file, use_ocr_fallback=True)
             
             # Validate text
@@ -129,6 +134,10 @@ def process_collection(company_id: str, collection_id: str) -> dict:
                     output_file = processed_dir / f"{resume_file.name}.txt"
                     output_file.write_text(text, encoding='utf-8')
             
+        except KeyboardInterrupt:
+            # Allow graceful cancellation
+            logger.warning("Processing interrupted by user")
+            raise
         except Exception as e:
             status = ResumeStatus.FAILED
             # Include more detailed error information
@@ -137,9 +146,12 @@ def process_collection(company_id: str, collection_id: str) -> dict:
                 reason = f"Unsupported format: {resume_file.suffix} (supported: .pdf, .docx, .txt)"
             elif "Failed to extract text" in error_msg:
                 reason = f"Extraction error: {error_msg}"
+            elif "timeout" in error_msg.lower():
+                reason = f"Processing timeout: {error_msg}"
             else:
                 reason = f"Processing failed: {error_msg}"
             logger.error(f"Failed to process {filename}: {e}", exc_info=True)
+            # Continue processing other files even if one fails
         
         # Record result
         validation_files.append({

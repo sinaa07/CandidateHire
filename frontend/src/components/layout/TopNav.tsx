@@ -30,51 +30,51 @@ export function TopNav() {
   }
 
   return (
-    <nav className="sticky top-0 z-40 bg-white border-b border-gray-200 px-6 py-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">CandidateHire</h1>
+    <nav className="sticky top-0 z-40 bg-white border-b border-[#E5E5E5] px-6 h-16 flex items-center justify-between shadow-card">
+      <h1 className="text-2xl font-bold bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] bg-clip-text text-transparent">
+        ResumeRanker
+      </h1>
 
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <button
-              onClick={handleCollectionsClick}
-              className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
-            >
-              Collections
-              <ChevronDown size={16} />
-            </button>
-
-            {isDropdownOpen && (
-              <div className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg min-w-64">
-                {collections.length > 0 ? (
-                  <ul className="py-2">
-                    {collections.map((collection) => (
-                      <li key={collection.id}>
-                        <button
-                          onClick={() => handleSelectCollection(collection)}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-                        >
-                          <div className="font-medium text-gray-900">{collection.company_id}</div>
-                          <div className="text-xs text-gray-500">{collection.id.substring(0, 12)}...</div>
-                          <div className="text-xs text-gray-400 capitalize">{collection.status}</div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="px-4 py-2 text-sm text-gray-500">No collections yet</div>
-                )}
-              </div>
-            )}
-          </div>
-
+      <div className="flex items-center gap-4">
+        <div className="relative">
           <button
-            onClick={handleNewCollection}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+            onClick={handleCollectionsClick}
+            className="flex items-center gap-2 px-3 py-2 text-[#262626] hover:bg-[#F5F5F5] rounded-md transition-colors text-sm font-medium"
           >
-            + New Collection
+            Collections
+            <ChevronDown size={16} />
           </button>
+
+          {isDropdownOpen && (
+            <div className="absolute top-full right-0 mt-2 bg-white border border-[#E5E5E5] rounded-lg shadow-modal min-w-64">
+              {collections.length > 0 ? (
+                <ul className="py-2">
+                  {collections.map((collection) => (
+                    <li key={collection.id}>
+                      <button
+                        onClick={() => handleSelectCollection(collection)}
+                        className="w-full text-left px-4 py-2 text-sm text-[#262626] hover:bg-[#F5F5F5] transition-colors"
+                      >
+                        <div className="font-medium text-[#262626]">{collection.company_id}</div>
+                        <div className="text-xs text-[#737373]">{collection.id.substring(0, 12)}...</div>
+                        <div className="text-xs text-[#737373] capitalize">{collection.status}</div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="px-4 py-2 text-sm text-[#737373]">No collections yet</div>
+              )}
+            </div>
+          )}
         </div>
+
+        <button
+          onClick={handleNewCollection}
+          className="px-4 py-2 gradient-primary text-white rounded-lg hover:opacity-90 transition-all font-medium shadow-card hover:shadow-lg hover:-translate-y-0.5"
+        >
+          + New Collection
+        </button>
       </div>
     </nav>
   )

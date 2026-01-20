@@ -3,7 +3,7 @@ import json
 import hashlib
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, AsyncGenerator
 from datetime import datetime, UTC, timedelta
 import numpy as np
 from app.core.config import COLLECTIONS_ROOT

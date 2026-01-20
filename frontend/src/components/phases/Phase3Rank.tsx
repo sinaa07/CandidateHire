@@ -98,100 +98,131 @@ export function Phase3Rank() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-12">
-      <h2 className="text-3xl font-bold text-gray-900 mb-8">Phase 3: Rank Candidates</h2>
+    <div className="max-w-5xl mx-auto px-6 py-12">
+      <div className="mb-8">
+        <h2 className="text-4xl font-bold text-[#262626] mb-2">Rank Candidates</h2>
+        <p className="text-[#737373]">Match resumes against job description</p>
+      </div>
 
       {!isCompleted && (
-        <div className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-900 mb-3">Job Description</label>
-            <div className="flex gap-2 bg-gray-50 p-2 rounded-lg w-fit">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Job Description Section */}
+          <div className="bg-white border border-[#E5E5E5] rounded-lg p-6 shadow-card">
+            <h3 className="font-semibold text-[#262626] mb-4">Job Description</h3>
+            <div className="flex gap-2 bg-[#F5F5F5] p-1 rounded-lg mb-4">
               <button
                 onClick={() => setMode("text")}
-                className={`px-4 py-2 rounded transition-colors ${
-                  mode === "text" ? "bg-white border border-gray-300" : "text-gray-600 hover:text-gray-900"
+                className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  mode === "text"
+                    ? "bg-white text-[#6366F1] shadow-sm"
+                    : "text-[#737373] hover:text-[#262626]"
                 }`}
               >
                 Paste Text
               </button>
               <button
                 onClick={() => setMode("file")}
-                className={`px-4 py-2 rounded transition-colors ${
-                  mode === "file" ? "bg-white border border-gray-300" : "text-gray-600 hover:text-gray-900"
+                className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  mode === "file"
+                    ? "bg-white text-[#6366F1] shadow-sm"
+                    : "text-[#737373] hover:text-[#262626]"
                 }`}
               >
                 Upload File
               </button>
             </div>
-          </div>
 
-          {mode === "text" && (
-            <textarea
-              value={jdText}
-              onChange={(e) => {
-                setJdText(e.target.value)
-                setError(null)
-              }}
-              placeholder="Enter or paste the job description here..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent min-h-48 resize-vertical"
-            />
-          )}
-
-          {mode === "file" && (
-            <div
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                dragActive ? "border-blue-600 bg-blue-50" : "border-gray-300 hover:border-gray-400"
-              }`}
-            >
-              <input
-                type="file"
-                accept=".pdf,.docx,.txt"
-                onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
-                className="hidden"
-                id="jd-upload"
+            {mode === "text" && (
+              <textarea
+                value={jdText}
+                onChange={(e) => {
+                  setJdText(e.target.value)
+                  setError(null)
+                }}
+                placeholder="Enter or paste the job description here..."
+                className="w-full px-4 py-3 border border-[#E5E5E5] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6366F1] focus:border-transparent min-h-64 resize-vertical bg-white"
               />
-              <label htmlFor="jd-upload" className="cursor-pointer block">
-                <UploadIcon size={32} className="mx-auto mb-2 text-gray-400" />
-                <p className="text-gray-700 font-medium">Drag and drop JD file here</p>
-                <p className="text-gray-500 text-sm">or click to browse</p>
-                <p className="text-gray-400 text-xs mt-2">Supported: .pdf, .docx, .txt</p>
-              </label>
-            </div>
-          )}
+            )}
 
-          {jdFile && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <p className="text-sm text-gray-700">📄 {jdFile.name}</p>
-            </div>
-          )}
+            {mode === "file" && (
+              <div
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
+                  dragActive ? "border-[#6366F1] bg-[#EEF2FF]" : "border-[#E5E5E5] hover:border-[#6366F1] bg-[#F5F5F5]"
+                }`}
+              >
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.txt"
+                  onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+                  className="hidden"
+                  id="jd-upload"
+                />
+                <label htmlFor="jd-upload" className="cursor-pointer block">
+                  <UploadIcon size={32} className={`mx-auto mb-2 ${dragActive ? "text-[#6366F1]" : "text-[#737373]"}`} />
+                  <p className="text-[#262626] font-medium">Drop JD.pdf or Browse</p>
+                  <p className="text-[#737373] text-sm mt-1">Supported: .pdf, .docx, .txt</p>
+                </label>
+              </div>
+            )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">Top K Candidates (Optional)</label>
-            <input
-              type="number"
-              value={topK}
-              onChange={(e) => setTopK(e.target.value)}
-              placeholder="e.g., 10"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-            />
-            <p className="text-xs text-gray-500 mt-1">Leave empty to rank all candidates</p>
+            {jdFile && (
+              <div className="mt-4 bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg p-3">
+                <p className="text-sm text-[#262626] font-medium">📄 {jdFile.name}</p>
+              </div>
+            )}
           </div>
 
-          {error && (
-            <div className="bg-red-50 border border-red-300 rounded-lg p-4 flex gap-3">
-              <AlertCircle size={20} className="text-red-600 flex-shrink-0" />
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          )}
+          {/* Ranking Config Section */}
+          <div className="bg-white border border-[#E5E5E5] rounded-lg p-6 shadow-card">
+            <h3 className="font-semibold text-[#262626] mb-4">Ranking Config</h3>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-[#262626] mb-2">Top Candidates</label>
+                <input
+                  type="number"
+                  value={topK}
+                  onChange={(e) => setTopK(e.target.value)}
+                  placeholder="e.g., 10"
+                  className="w-full px-4 py-2 border border-[#E5E5E5] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6366F1] focus:border-transparent bg-white"
+                />
+                <p className="text-xs text-[#737373] mt-1">Leave empty to rank all candidates</p>
+              </div>
 
+              <div>
+                <p className="text-sm font-medium text-[#262626] mb-3">Algorithm</p>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 p-3 bg-[#F5F5F5] rounded-lg cursor-pointer hover:bg-[#EEF2FF] transition-colors">
+                    <input type="radio" name="algorithm" defaultChecked className="text-[#6366F1]" />
+                    <span className="text-sm text-[#262626]">Semantic Match</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-[#E5E5E5]">
+                <p className="text-sm text-[#737373] mb-2">⏱️ Estimated time: ~30 sec</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-6 bg-[#FEE2E2] border border-[#EF4444] rounded-lg p-4 flex gap-3">
+          <AlertCircle size={20} className="text-[#EF4444] flex-shrink-0" />
+          <p className="text-sm text-[#DC2626]">{error}</p>
+        </div>
+      )}
+
+      {!isCompleted && (
+        <div className="mt-6">
           <button
             onClick={handleRank}
             disabled={!canSubmit || loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            className="w-full gradient-primary text-white py-4 rounded-lg font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-card hover:shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2"
           >
             {loading ? (
               <>
@@ -199,7 +230,7 @@ export function Phase3Rank() {
                 Ranking...
               </>
             ) : (
-              "Rank Candidates"
+              "Start Ranking →"
             )}
           </button>
         </div>
@@ -207,14 +238,14 @@ export function Phase3Rank() {
 
       {isCompleted && (
         <div className="space-y-6">
-          <div className="flex items-center gap-2 text-green-700 bg-green-50 p-4 rounded-lg border border-green-200">
+          <div className="flex items-center gap-3 text-[#10B981] bg-[#ECFDF5] border border-[#10B981] p-4 rounded-lg">
             <CheckCircle2 size={24} />
-            <span className="font-medium">Ranking Complete - {rankingCount} candidates ranked</span>
+            <span className="font-semibold">Ranking Complete - {rankingCount} candidates ranked</span>
           </div>
 
           <button
             onClick={() => setPhase(4)}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+            className="w-full gradient-primary text-white py-4 rounded-lg font-semibold hover:opacity-90 transition-all shadow-card hover:shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2"
           >
             View Results
             <span>→</span>

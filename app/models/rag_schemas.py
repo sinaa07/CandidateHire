@@ -8,7 +8,7 @@ class RAGFilters(BaseModel):
     min_rank_position: Optional[int] = Field(None, ge=1)
     max_rank_position: Optional[int] = Field(None, ge=1)
     min_ranking_score: Optional[float] = Field(None, ge=0.0, le=1.0)
-    required_skills: Optional[List[str]] = Field(None, default_factory=list)
+    required_skills: Optional[List[str]] = Field(default_factory=list)
 
 
 class RAGQueryRequest(BaseModel):

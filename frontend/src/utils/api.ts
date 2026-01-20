@@ -161,3 +161,56 @@ export async function checkOutputs(collectionId: string, companyId: string) {
 
   return handleApiResponse(response)
 }
+
+export interface RAGStatusResponse {
+  rag_available: boolean
+  features_enabled: {
+    phase2_complete: boolean
+    phase3_available: boolean
+    llm_providers: string[]
+  }
+  index_built: boolean
+  index_stats: any | null
+}
+
+export interface RAGQueryRequest {
+  company_id: string
+  query: string
+  top_k?: number
+  filters?: {
+    use_ranking?: boolean
+    min_rank_position?: number
+    max_rank_position?: number
+    min_ranking_score?: number
+    required_skills?: string[]
+  }
+  include_context?: boolean
+}
+
+export interface RAGQueryResponse {
+  task_id: string
+  status: string
+}
+
+export async function getRAGStatus(collectionId: string, companyId: string): Promise<RAGStatusResponse> {
+  const response = await fetch(`${API_BASE_URL}/collections/${collectionId}/rag/status?company_id=${companyId}`)
+  return handleApiResponse<RAGStatusResponse>(response)
+}
+
+export async function initializeRAG(collectionId: string, companyId: string) {
+  const response = await fetch(`${API_BASE_URL}/collections/${collectionId}/rag/initialize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ company_id: companyId }),
+  })
+  return handleApiResponse(response)
+}
+
+export async function queryRAG(collectionId: string, request: RAGQueryRequest): Promise<RAGQueryResponse> {
+  const response = await fetch(`${API_BASE_URL}/collections/${collectionId}/rag/query`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  })
+  return handleApiResponse<RAGQueryResponse>(response)
+}

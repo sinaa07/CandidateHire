@@ -3,8 +3,13 @@ from app.models.api_schemas import ProcessRequest, StandardResponse
 from app.utils.paths import get_collection_root, assert_collection_exists
 from app.services.processing_service import process_collection
 from app.core.errors import to_http_error
+import asyncio
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 router = APIRouter(prefix="/collections", tags=["processing"])
+
+# Thread pool for CPU-intensive processing with timeout protection
+executor = ThreadPoolExecutor(max_workers=1)
 
 @router.post("/{collection_id}/process")
 async def process_collection_endpoint(
@@ -36,8 +41,15 @@ async def process_collection_endpoint(
         if not input_dir.exists() or not list(input_dir.glob("*")):
             raise ValueError("No resume files found in collection")
         
-        # 3. Call processing service
-        result = process_collection(request.company_id, collection_id)
+        # 3. Run processing in executor with timeout (30 minutes max)
+        loop = asyncio.get_event_loop()
+        try:
+            result = await asyncio.wait_for(
+                loop.run_in_executor(executor, process_collection, request.company_id, collection_id),
+                timeout=1800.0  # 30 minutes
+            )
+        except asyncio.TimeoutError:
+            raise ValueError("Processing timed out after 30 minutes. Please try again or check for problematic files.")
         
         # 4. Return processing summary
         return StandardResponse(

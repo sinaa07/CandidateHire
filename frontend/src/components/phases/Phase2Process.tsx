@@ -55,77 +55,106 @@ export function Phase2Process() {
     }
   }
 
+  const progress = stats ? Math.round((stats.ok / stats.total_files) * 100) : 0
+
   return (
-    <div className="max-w-2xl mx-auto px-6 py-12">
-      <h2 className="text-3xl font-bold text-gray-900 mb-2">Phase 2: Process Resumes</h2>
-      <p className="text-gray-600 mb-8">Extract and validate resume data from your collection.</p>
+    <div className="max-w-3xl mx-auto px-6 py-12">
+      <div className="mb-8">
+        <h2 className="text-4xl font-bold text-[#262626] mb-2">Processing Resumes</h2>
+        <p className="text-[#737373]">Extract and validate resume data from your collection</p>
+      </div>
 
       <div className="space-y-6">
         {currentCollection.collection_id && (
-          <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg">
+          <div className="text-sm text-[#737373] bg-white border border-[#E5E5E5] p-3 rounded-lg font-mono">
             Collection ID: {currentCollection.collection_id.substring(0, 30)}...
           </div>
         )}
 
         {!isProcessing && !isCompleted && (
-          <>
-            <p className="text-gray-700">Ready to extract and validate resume data.</p>
+          <div className="bg-white border border-[#E5E5E5] rounded-lg p-8 shadow-card text-center">
+            <div className="w-16 h-16 bg-[#F5F5F5] rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">⚙️</span>
+            </div>
+            <p className="text-[#262626] font-medium mb-6">Ready to extract and validate resume data</p>
             <button
               onClick={handleStartProcessing}
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-3 gradient-primary text-white rounded-lg font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-card"
             >
-              {loading ? "Starting..." : "Start Processing"}
+              {loading ? "Starting..." : "Start Processing →"}
             </button>
-          </>
+          </div>
         )}
 
         {isProcessing && (
-          <div className="text-center py-8 space-y-4">
-            <Loader size={40} className="mx-auto text-blue-600 animate-spin" />
-            <p className="text-gray-700 font-medium">Processing resumes...</p>
-            <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-              <div className="bg-blue-600 h-full animate-pulse" style={{ width: "67%" }} />
+          <div className="bg-white border border-[#E5E5E5] rounded-lg p-8 shadow-card">
+            <div className="text-center mb-6">
+              <Loader size={48} className="mx-auto text-[#6366F1] animate-spin mb-4" />
+              <p className="text-[#262626] font-semibold text-lg mb-2">Processing resumes...</p>
+              <p className="text-[#737373] text-sm">Extracting text and validating content</p>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between text-sm text-[#737373] mb-2">
+                  <span>Progress</span>
+                  <span className="font-semibold text-[#262626]">{progress}%</span>
+                </div>
+                <div className="w-full bg-[#F5F5F5] rounded-full h-3 overflow-hidden">
+                  <div
+                    className="gradient-success h-full transition-all duration-500 ease-out rounded-full"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+              {stats && (
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#E5E5E5]">
+                  <div>
+                    <p className="text-xs text-[#737373] mb-1">Processed</p>
+                    <p className="text-2xl font-bold text-[#10B981]">{stats.ok}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#737373] mb-1">Total</p>
+                    <p className="text-2xl font-bold text-[#262626]">{stats.total_files}</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {isCompleted && stats && (
           <>
-            <div className="flex items-center gap-2 text-green-700 bg-green-50 p-4 rounded-lg border border-green-200">
+            <div className="flex items-center gap-3 text-[#10B981] bg-[#ECFDF5] border border-[#10B981] p-4 rounded-lg">
               <CheckCircle2 size={24} />
-              <span className="font-medium">Processing Complete</span>
+              <span className="font-semibold">Processing Complete</span>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Processing Summary</h3>
-              <div className="space-y-3">
-                <div className="flex justify-between text-gray-700">
-                  <span>Total Files:</span>
-                  <span className="font-medium">{stats.total_files}</span>
+            <div className="bg-white border border-[#E5E5E5] rounded-lg p-6 shadow-card">
+              <h3 className="font-semibold text-[#262626] mb-6 text-lg">Processing Summary</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-[#F5F5F5] rounded-lg p-4">
+                  <p className="text-sm text-[#737373] mb-1">Total Files</p>
+                  <p className="text-2xl font-bold text-[#262626]">{stats.total_files}</p>
                 </div>
-                <div className="flex justify-between text-green-700">
-                  <span>✓ Successfully Processed:</span>
-                  <span className="font-medium">{stats.ok}</span>
+                <div className="bg-[#ECFDF5] rounded-lg p-4 border border-[#10B981]">
+                  <p className="text-sm text-[#10B981] mb-1">✓ Successfully Processed</p>
+                  <p className="text-2xl font-bold text-[#10B981]">{stats.ok}</p>
                 </div>
-                <div className="flex justify-between text-red-700">
-                  <span>✗ Failed:</span>
-                  <span className="font-medium">{stats.failed}</span>
+                <div className="bg-[#FEE2E2] rounded-lg p-4 border border-[#EF4444]">
+                  <p className="text-sm text-[#EF4444] mb-1">✗ Failed</p>
+                  <p className="text-2xl font-bold text-[#EF4444]">{stats.failed}</p>
                 </div>
-                <div className="flex justify-between text-gray-700">
-                  <span>○ Empty:</span>
-                  <span className="font-medium">{stats.empty}</span>
-                </div>
-                <div className="flex justify-between text-yellow-700">
-                  <span>≈ Duplicates:</span>
-                  <span className="font-medium">{stats.duplicate}</span>
+                <div className="bg-[#FEF3C7] rounded-lg p-4 border border-[#F59E0B]">
+                  <p className="text-sm text-[#F59E0B] mb-1">≈ Duplicates</p>
+                  <p className="text-2xl font-bold text-[#F59E0B]">{stats.duplicate}</p>
                 </div>
               </div>
             </div>
 
             <button
               onClick={() => setPhase(3)}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+              className="w-full gradient-primary text-white py-4 rounded-lg font-semibold hover:opacity-90 transition-all shadow-card hover:shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2"
             >
               Continue to Ranking
               <span>→</span>
@@ -134,9 +163,9 @@ export function Phase2Process() {
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-300 rounded-lg p-4 flex gap-3">
-            <AlertCircle size={20} className="text-red-600 flex-shrink-0" />
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="bg-[#FEE2E2] border border-[#EF4444] rounded-lg p-4 flex gap-3">
+            <AlertCircle size={20} className="text-[#EF4444] flex-shrink-0" />
+            <p className="text-sm text-[#DC2626]">{error}</p>
           </div>
         )}
       </div>
