@@ -30,3 +30,7 @@ anthropic>=0.18.0
 pytest>=7.0.0
 pytest-cov>=4.0.0
 httpx>=0.24.0
+# RAG evaluation
+ragas>=0.1.0
+datasets>=2.14.0
+langchain>=0.1.0

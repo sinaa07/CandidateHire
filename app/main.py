@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from app.api.routes import collections_create, collections_process, collections_rank, collections_report
-from app.api.routes import collections_rank_file, collections_rag
+from app.api.routes import collections_rank_file, collections_rag, collections_evaluate
 import asyncio
 app = FastAPI(
     title="CandidateHire API",
@@ -26,6 +26,7 @@ app.include_router(collections_process.router)     # Phase 2 - process
 app.include_router(collections_rank.router)        # Phase 3 - rank
 app.include_router(collections_report.router)      # Phase 4 - reports
 app.include_router(collections_rag.router)         # RAG - retrieval-augmented generation
+app.include_router(collections_evaluate.router)    # RAG evaluation
 
 @app.get("/")
 async def root():
@@ -40,7 +41,9 @@ async def root():
             "outputs": "/collections/{id}/outputs (GET)",
             "rag": "/collections/{id}/rag/query (POST)",
             "rag_status": "/collections/{id}/rag/status (GET)",
-            "rag_stream": "/rag/stream/{task_id} (GET)"
+            "rag_stream": "/rag/stream/{task_id} (GET)",
+            "rag_evaluate": "/collections/{id}/rag/evaluate (POST)",
+            "rag_evaluation_summary": "/collections/{id}/rag/evaluation/summary (GET)"
         }
     }
 
