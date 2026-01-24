@@ -26,7 +26,24 @@ def fit_resume_matrix(vectorizer: TfidfVectorizer, resume_texts: list[str]) -> s
     Returns:
         Sparse matrix for resumes
     """
-    return vectorizer.fit_transform(resume_texts)
+    # Filter out empty texts
+    non_empty_texts = [text for text in resume_texts if text and text.strip()]
+    
+    if not non_empty_texts:
+        raise ValueError("No non-empty resume texts provided")
+    
+    try:
+        matrix = vectorizer.fit_transform(non_empty_texts)
+        
+        # Check if vocabulary is empty
+        if len(vectorizer.vocabulary_) == 0:
+            raise ValueError("Empty vocabulary: all documents contain only stop words")
+        
+        return matrix
+    except ValueError as e:
+        if "empty vocabulary" in str(e).lower() or "only contain stop words" in str(e).lower():
+            raise ValueError("Empty vocabulary: perhaps the documents only contain stop words. Please provide more substantial text content.")
+        raise
 
 def transform_text(vectorizer: TfidfVectorizer, text: str) -> scipy.sparse.csr_matrix:
     """
@@ -39,7 +56,15 @@ def transform_text(vectorizer: TfidfVectorizer, text: str) -> scipy.sparse.csr_m
     Returns:
         Sparse vector
     """
-    return vectorizer.transform([text])
+    if not text or not text.strip():
+        # Return empty vector matching vocabulary size
+        return scipy.sparse.csr_matrix((1, len(vectorizer.vocabulary_)))
+    
+    try:
+        return vectorizer.transform([text])
+    except Exception as e:
+        # If transformation fails, return empty vector
+        return scipy.sparse.csr_matrix((1, len(vectorizer.vocabulary_)))
 
 def cosine_similarities(resume_matrix: scipy.sparse.csr_matrix, jd_vector: scipy.sparse.csr_matrix) -> list[float]:
     """

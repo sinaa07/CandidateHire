@@ -10,6 +10,7 @@ import { FiltersBar } from "@/components/features/FiltersBar"
 import { CompareSelectionBar } from "@/components/features/CompareSelectionBar"
 import { ReRankModal } from "@/components/modals/ReRankModal"
 import { ComparisonModal } from "@/components/modals/ComparisonModal"
+import { NERTestingSection } from "@/components/features/NERTestingSection"
 
 export function Phase4Results() {
   const {
@@ -29,6 +30,7 @@ export function Phase4Results() {
   const [showReRankModal, setShowReRankModal] = useState(false)
   const [showComparisonModal, setShowComparisonModal] = useState(false)
   const [isLoadingReport, setIsLoadingReport] = useState(true)
+  const [selectedFilename, setSelectedFilename] = useState<string | null>(null)
 
   useEffect(() => {
     if (!collection_id || !company_id) return
@@ -129,6 +131,15 @@ export function Phase4Results() {
       {/* Filters Bar */}
       <FiltersBar />
 
+      {/* NER Testing Section */}
+      {selectedFilename && collection_id && company_id && (
+        <NERTestingSection
+          collectionId={collection_id}
+          companyId={company_id}
+          selectedFilename={selectedFilename}
+        />
+      )}
+
       {/* Results Table */}
       {error && (
         <div className="bg-[#FEE2E2] border border-[#EF4444] rounded-lg p-4 mb-6 flex gap-3">
@@ -137,7 +148,7 @@ export function Phase4Results() {
         </div>
       )}
 
-      <ResultsTable candidates={candidates} />
+      <ResultsTable candidates={candidates} onRowClick={setSelectedFilename} />
 
       {/* Selection Bar */}
       {compareMode && selectedForComparison.length > 0 && (

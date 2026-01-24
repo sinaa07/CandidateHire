@@ -4,6 +4,22 @@ from fastapi.responses import StreamingResponse
 from app.api.routes import collections_create, collections_process, collections_rank, collections_report
 from app.api.routes import collections_rank_file, collections_rag, collections_evaluate
 import asyncio
+import os
+from pathlib import Path
+
+# Load environment variables from .env file if it exists
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+        print(f"Loaded environment variables from {env_path}")
+    else:
+        # Also try loading from current directory
+        load_dotenv()
+except ImportError:
+    # python-dotenv not installed, skip .env loading
+    pass
 app = FastAPI(
     title="CandidateHire API",
     description="Resume ranking and processing system",

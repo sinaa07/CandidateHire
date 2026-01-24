@@ -7,9 +7,10 @@ import { formatScore, getScoreBgColor, getScoreTextColor, truncateFilename } fro
 
 interface ResultsTableProps {
   candidates: RankedCandidate[]
+  onRowClick?: (filename: string) => void
 }
 
-export function ResultsTable({ candidates }: ResultsTableProps) {
+export function ResultsTable({ candidates, onRowClick }: ResultsTableProps) {
   const { compareMode, selectedForComparison, toggleSelectedForComparison, filters } = useAppContext()
   const [currentPage, setCurrentPage] = useState(1)
   const [sortBy, setSortBy] = useState<"rank" | "score">("rank")
@@ -67,7 +68,8 @@ export function ResultsTable({ candidates }: ResultsTableProps) {
             {paginatedData.map((candidate, idx) => (
               <tr
                 key={candidate.filename}
-                className={`border-b border-[#E5E5E5] ${idx % 2 === 0 ? "bg-white" : "bg-[#F5F5F5]"} hover:bg-[#EEF2FF] transition-colors`}
+                onClick={() => onRowClick?.(candidate.filename)}
+                className={`border-b border-[#E5E5E5] ${idx % 2 === 0 ? "bg-white" : "bg-[#F5F5F5]"} hover:bg-[#EEF2FF] transition-colors ${onRowClick ? "cursor-pointer" : ""}`}
               >
                 {compareMode && (
                   <td className="px-4 py-4 text-center">

@@ -20,6 +20,14 @@ from app.utils.artifacts import (
     save_resume_index,
     save_rank_config
 )
+from app.utils.section_parser import parse_sections
+from app.utils.tfidf_builder import (
+    build_section_aware_tfidf,
+    transform_sections,
+    transform_jd_sections,
+    compute_section_aware_similarity
+)
+from app.utils.ner.base import ExtractedEntities
 
 logger = logging.getLogger(__name__)
 
@@ -45,27 +53,96 @@ def rank_collection(company_id: str, collection_id: str, jd_text: str, top_k: in
     if not resume_files:
         raise ValueError("No processed resumes found")
     
+    # Load resume texts and sections
     resume_texts = []
     resume_filenames = []
+    resume_sections_list = []
+    resume_entities_list = []
     
     for resume_file in resume_files:
         text = resume_file.read_text(encoding='utf-8', errors='ignore')
         resume_texts.append(text)
         resume_filenames.append(resume_file.name)
+        
+        # Try to load sections from JSON (if available from Phase 2)
+        sections = None
+        sections_file = processed_dir / f"{resume_file.stem}_sections.json"
+        if sections_file.exists():
+            try:
+                sections_dict = json.loads(sections_file.read_text(encoding='utf-8'))
+                from app.utils.section_parser import ResumeSections
+                sections = ResumeSections(
+                    summary=sections_dict.get("summary", ""),
+                    experience=sections_dict.get("experience", ""),
+                    skills=sections_dict.get("skills", ""),
+                    education=sections_dict.get("education", ""),
+                    projects=sections_dict.get("projects", ""),
+                    other=sections_dict.get("other", "")
+                )
+            except Exception as e:
+                logger.warning(f"Failed to load sections for {resume_file.name}: {e}")
+        
+        # Parse sections if not loaded
+        if sections is None:
+            sections = parse_sections(text)
+        resume_sections_list.append(sections)
+        
+        # Try to load entities from JSON (if available from Phase 2)
+        entities = None
+        entities_file = processed_dir / f"{resume_file.stem}_entities.json"
+        if entities_file.exists():
+            try:
+                entities_dict = json.loads(entities_file.read_text(encoding='utf-8'))
+                entities = ExtractedEntities.from_dict(entities_dict)
+            except Exception as e:
+                logger.warning(f"Failed to load entities for {resume_file.name}: {e}")
+        
+        resume_entities_list.append(entities)
     
     skills_vocab = SKILLS
     jd_skills = extract_skills(jd_text, skills_vocab)
     jd_skills_set = set(jd_skills)
     
-    vectorizer = build_tfidf_vectorizer()
-    resume_matrix = fit_resume_matrix(vectorizer, resume_texts)
-    jd_vector = transform_text(vectorizer, jd_text)
-    tfidf_scores = cosine_similarities(resume_matrix, jd_vector)
+    # Use section-aware TF-IDF if sections are available
+    use_section_aware = all(sections is not None for sections in resume_sections_list)
+    
+    if use_section_aware:
+        logger.info("Using section-aware TF-IDF for ranking")
+        # Build section-aware vectorizers
+        section_vectorizers = build_section_aware_tfidf(resume_sections_list, skills_vocab)
+        
+        # Transform JD
+        jd_vectors = transform_jd_sections(jd_text, section_vectorizers, skills_vocab)
+        
+        # Compute TF-IDF scores using section-aware similarity
+        tfidf_scores = []
+        for sections, resume_text in zip(resume_sections_list, resume_texts):
+            resume_vectors = transform_sections(sections, section_vectorizers, skills_vocab)
+            similarity = compute_section_aware_similarity(
+                resume_vectors, jd_vectors, 
+                resume_text=resume_text, jd_text=jd_text, 
+                skills_vocab=skills_vocab
+            )
+            tfidf_scores.append(similarity)
+    else:
+        logger.info("Falling back to standard TF-IDF (sections not available)")
+        # Fallback to standard TF-IDF
+        vectorizer = build_tfidf_vectorizer()
+        resume_matrix = fit_resume_matrix(vectorizer, resume_texts)
+        jd_vector = transform_text(vectorizer, jd_text)
+        tfidf_scores = cosine_similarities(resume_matrix, jd_vector)
     
     results = []
     
-    for idx, (filename, resume_text, tfidf_score) in enumerate(zip(resume_filenames, resume_texts, tfidf_scores)):
-        resume_skills = extract_skills(resume_text, skills_vocab)
+    for idx, (filename, resume_text, tfidf_score, entities) in enumerate(
+        zip(resume_filenames, resume_texts, tfidf_scores, resume_entities_list)
+    ):
+        # Extract skills - prefer from entities if available
+        if entities and entities.skills:
+            resume_skills = list(entities.skills.keys())
+        else:
+            resume_skills = extract_skills(resume_text, skills_vocab)
+        
         resume_skills_set = set(resume_skills)
         
         skill_score = skill_overlap_score(jd_skills_set, resume_skills_set)
@@ -130,13 +207,16 @@ def rank_collection(company_id: str, collection_id: str, jd_text: str, top_k: in
     
     artifacts_dir = ensure_artifacts_dir(collection_root)
     
-    save_vectorizer(artifacts_dir, vectorizer)
-    save_sparse_matrix(artifacts_dir, resume_matrix)
-    save_resume_index(artifacts_dir, resume_filenames)
+    # Save artifacts (only if using standard TF-IDF)
+    if not use_section_aware:
+        save_vectorizer(artifacts_dir, vectorizer)
+        save_sparse_matrix(artifacts_dir, resume_matrix)
+        save_resume_index(artifacts_dir, resume_filenames)
     
     rank_config = {
         "weights": {"tfidf": 0.7, "skill": 0.3},
         "skills_vocab_version": "v1",
+        "section_aware": use_section_aware,
         "created_at": datetime.now(UTC).isoformat()
     }
     save_rank_config(artifacts_dir, rank_config)

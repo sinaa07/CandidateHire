@@ -37,7 +37,7 @@ def is_ocr_available() -> bool:
         return False
 
 
-def extract_text_with_ocr(pdf_path: Path, dpi: int = 300, lang: str = 'eng') -> str:
+def extract_text_with_ocr(pdf_path: Path, dpi: int = 150, lang: str = 'eng') -> str:
     """
     Extract text from PDF using OCR (Optical Character Recognition).
     
@@ -68,7 +68,7 @@ def extract_text_with_ocr(pdf_path: Path, dpi: int = 300, lang: str = 'eng') -> 
             pdf_path,
             dpi=dpi,
             fmt='png',
-            thread_count=1  # Single-threaded for stability
+            thread_count=4  # Single-threaded for stability
         )
         
         if not images:

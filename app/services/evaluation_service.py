@@ -7,7 +7,7 @@ from typing import List, Dict, Optional, Tuple
 from datetime import datetime, UTC
 from datasets import Dataset
 from ragas import evaluate
-from ragas.metrics import faithfulness, context_recall, answer_relevance
+from ragas.metrics.collections import faithfulness, context_recall, answer_relevancy
 from app.models.evaluation_schemas import (
     EvaluationRecord, CollectionEvaluationSummary, EvaluationMetrics
 )
@@ -58,14 +58,14 @@ def evaluate_rag(
         dataset = Dataset.from_dict(data_dict)
         
         # Run evaluation
-        metrics = [faithfulness, context_recall, answer_relevance]
+        metrics = [faithfulness, context_recall, answer_relevancy]
         results = evaluate(dataset, metrics=metrics)
         
-        # Extract scores
+        # Extract scores (ragas returns 'answer_relevancy' but we use 'answer_relevance' in our schema)
         scores = {
             "faithfulness": float(results["faithfulness"][0]) if "faithfulness" in results else 0.0,
             "context_recall": float(results["context_recall"][0]) if "context_recall" in results else 0.0,
-            "answer_relevance": float(results["answer_relevance"][0]) if "answer_relevance" in results else 0.0
+            "answer_relevance": float(results["answer_relevancy"][0]) if "answer_relevancy" in results else 0.0
         }
         
         logger.info(f"Ragas evaluation completed: {scores}")

@@ -156,6 +156,34 @@ export async function getReport(collectionId: string, companyId: string): Promis
   return handleApiResponse<CollectionReport>(response)
 }
 
+export interface EntitiesResponse {
+  filename: string
+  entities: {
+    skills: Record<string, { count: number; contexts: string[]; confidence: number }>
+    roles: string[]
+    organizations: string[]
+    education: { degree: string | null; field: string | null }
+    experience: {
+      years_min: number | null
+      years_max: number | null
+      earliest_date: string | null
+      latest_date: string | null
+    }
+    locations: string[]
+  }
+}
+
+export async function getResumeEntities(
+  collectionId: string,
+  filename: string,
+  companyId: string
+): Promise<EntitiesResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/collections/${collectionId}/entities/${encodeURIComponent(filename)}?company_id=${companyId}`
+  )
+  return handleApiResponse<EntitiesResponse>(response)
+}
+
 export async function checkOutputs(collectionId: string, companyId: string) {
   const response = await fetch(`${API_BASE_URL}/collections/${collectionId}/outputs?company_id=${companyId}`)
 
