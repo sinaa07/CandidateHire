@@ -1,0 +1,37 @@
+BOB MARTINEZ
+bob.martinez@email.com | Austin, TX | github.com/bobmartinez
+
+SUMMARY
+Full stack engineer specializing in React, Node.js, and cloud-native deployments. Five years
+of experience delivering customer-facing web applications with emphasis on performance,
+accessibility, and maintainable TypeScript codebases.
+
+WORK EXPERIENCE
+Full Stack Engineer — BrightCart, Austin, TX
+Mar 2020 - Present
+- Led migration from Create React App to Next.js 14 with improved Core Web Vitals scores.
+- Built Node.js Express services integrating Stripe billing and webhook reconciliation.
+- Deployed services on AWS ECS with Terraform and GitHub Actions CI/CD pipelines.
+- Partnered with design team to implement component library using Tailwind CSS.
+
+Frontend Developer — Lone Star Digital, Dallas, TX
+Jul 2018 - Feb 2020
+- Developed responsive dashboards for logistics clients using React and Redux Toolkit.
+- Integrated WebSocket feeds for real-time shipment tracking maps.
+- Reduced bundle size by 28% via code splitting and lazy route loading.
+
+Web Intern — Austin Startup Studio, Austin, TX
+Jan 2018 - Jun 2018
+- Built marketing landing pages and A/B test variants with JavaScript and Sass.
+- Assisted senior engineers with API integration testing and bug triage.
+
+EDUCATION
+Bachelor of Technology, Information Technology — University of Texas at Austin, 2017
+
+SKILLS
+JavaScript, TypeScript, React, Next.js, Node.js, Express, PostgreSQL, MongoDB, AWS,
+Docker, Terraform, Git, HTML, CSS, Tailwind, Jest, Cypress, GraphQL, REST, agile
+
+PROJECTS
+Personal portfolio optimizer tool using Next.js and Vercel edge functions; featured in local
+meetup talk on frontend performance tuning.

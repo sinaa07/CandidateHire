@@ -1,8 +1,9 @@
 """Utility for generating embeddings using sentence-transformers."""
 import logging
-from typing import List
+from typing import List, Optional
 import numpy as np
 from sentence_transformers import SentenceTransformer
+from app.utils.latency_tracker import LatencyRecorder, STAGE_EMBEDDING_GENERATION
 
 logger = logging.getLogger(__name__)
 
@@ -22,31 +23,47 @@ def get_embedding_model() -> SentenceTransformer:
     return _model
 
 
-def generate_embeddings(texts: List[str]) -> np.ndarray:
+def generate_embeddings(
+    texts: List[str],
+    recorder: Optional[LatencyRecorder] = None,
+) -> np.ndarray:
     """
     Generate embeddings for a list of texts.
     
     Args:
         texts: List of text strings
+        recorder: Optional latency recorder
         
     Returns:
         numpy array of shape (n_texts, 384)
     """
     model = get_embedding_model()
-    embeddings = model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
+    if recorder:
+        with recorder.stage(STAGE_EMBEDDING_GENERATION):
+            embeddings = model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
+    else:
+        embeddings = model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
     return embeddings
 
 
-def generate_query_embedding(query: str) -> np.ndarray:
+def generate_query_embedding(
+    query: str,
+    recorder: Optional[LatencyRecorder] = None,
+) -> np.ndarray:
     """
     Generate embedding for a single query.
     
     Args:
         query: Query text
+        recorder: Optional latency recorder
         
     Returns:
         numpy array of shape (384,)
     """
     model = get_embedding_model()
-    embedding = model.encode([query], convert_to_numpy=True)[0]
+    if recorder:
+        with recorder.stage(STAGE_EMBEDDING_GENERATION):
+            embedding = model.encode([query], convert_to_numpy=True)[0]
+    else:
+        embedding = model.encode([query], convert_to_numpy=True)[0]
     return embedding

@@ -48,7 +48,8 @@ async def get_collection_report(
             },
             "phase3": {
                 "ranking_summary": None
-            }
+            },
+            "latency": None,
         }
         
         # Read meta if exists
@@ -74,6 +75,12 @@ async def get_collection_report(
         except ValueError:
             pass
         
+        # Latency report (p50 / p95 / p99 per stage)
+        try:
+            response["latency"] = read_json_file(paths["latency"])
+        except ValueError:
+            pass
+        
         # Include full results if requested
         if include_results:
             try:
@@ -85,6 +92,32 @@ async def get_collection_report(
         
     except Exception as exc:
         raise to_http_error(exc)
+
+
+@router.get("/{collection_id}/latency")
+async def get_latency_report(
+    collection_id: str,
+    company_id: str = Query(..., description="Company identifier"),
+) -> dict:
+    """
+    Return per-stage latency percentiles (p50 / p95 / p99) for a collection.
+
+    Populated after Phase 2 processing; updated by RAG queries and Phase 3 ranking.
+    """
+    try:
+        collection_root = get_collection_root(company_id, collection_id)
+        assert_collection_exists(collection_root)
+        paths = get_report_paths(collection_root)
+        report = read_json_file(paths["latency"])
+        return {"collection_id": collection_id, "company_id": company_id, "latency": report}
+    except ValueError:
+        raise HTTPException(
+            status_code=404,
+            detail="Latency report not found. Run Phase 2 processing first.",
+        )
+    except Exception as exc:
+        raise to_http_error(exc)
+
 
 @router.get("/{collection_id}/outputs")
 async def get_collection_outputs(

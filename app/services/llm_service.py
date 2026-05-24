@@ -2,9 +2,11 @@
 import json
 import logging
 import os
+import time
 from typing import AsyncGenerator, Optional
 import openai
 from anthropic import Anthropic
+from app.utils.latency_tracker import LatencyRecorder, STAGE_LLM
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +55,8 @@ def detect_free_tier_limit(provider: str) -> bool:
 async def stream_llm_response(
     system_prompt: str,
     user_prompt: str,
-    provider: str = "openai"
+    provider: str = "openai",
+    recorder: Optional[LatencyRecorder] = None,
 ) -> AsyncGenerator[str, None]:
     """
     Stream LLM response using SSE-compatible generator.
@@ -66,6 +69,7 @@ async def stream_llm_response(
     Yields:
         Chunks of text
     """
+    start = time.perf_counter()
     try:
         if provider == "openai":
             client = _get_openai_client()
@@ -130,6 +134,10 @@ async def stream_llm_response(
     except Exception as e:
         logger.error(f"LLM service error: {e}", exc_info=True)
         yield f"Error: {str(e)}"
+    finally:
+        if recorder is not None:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            recorder.record(STAGE_LLM, elapsed_ms)
 
 
 def get_available_providers() -> list[str]:

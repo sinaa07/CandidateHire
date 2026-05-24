@@ -1,0 +1,38 @@
+CAROL NGUYEN
+carol.nguyen@email.com | Seattle, WA | carolnguyen.dev
+
+SUMMARY
+Machine learning engineer with expertise in NLP, PyTorch, and MLOps. Four years applying
+transformers and classical ML to search ranking, document classification, and candidate
+matching systems in hiring technology products.
+
+WORK EXPERIENCE
+ML Engineer — TalentMatch AI, Seattle, WA
+Aug 2021 - Present
+- Fine-tuned sentence-transformer models for semantic resume-to-job matching.
+- Built FAISS indexing pipeline processing 50k documents nightly on Kubernetes.
+- Deployed model serving with batching and ONNX runtime reducing inference cost 22%.
+- Collaborated with backend team on FastAPI endpoints exposing ranking explanations.
+
+Data Scientist — Northwest Analytics, Seattle, WA
+Jun 2019 - Jul 2021
+- Developed NLP classifiers for support ticket routing using spaCy and scikit-learn.
+- Created feature stores and monitoring dashboards for model drift detection.
+- Published internal playbook for reproducible experiment tracking with MLflow.
+
+Research Assistant — UW NLP Lab, Seattle, WA
+Sep 2017 - May 2019
+- Assisted with dataset annotation and baseline BERT experiments on legal text corpora.
+- Implemented evaluation scripts for precision, recall, and F1 reporting.
+
+EDUCATION
+Master of Science, Computer Science (ML focus) — University of Washington, 2019
+Bachelor of Science, Mathematics — University of Washington, 2017
+
+SKILLS
+Python, PyTorch, TensorFlow, scikit-learn, NLP, transformers, FAISS, Docker, Kubernetes,
+AWS, GCP, PostgreSQL, FastAPI, pandas, numpy, Git, MLflow, deep learning, computer vision
+
+PROJECTS
+Thesis project on multi-label skill extraction from resumes using weak supervision and
+embedding clustering; code open-sourced with 200+ GitHub stars.

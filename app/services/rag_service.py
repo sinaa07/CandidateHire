@@ -1,4 +1,5 @@
 """RAG service for index building and query processing."""
+import asyncio
 import json
 import hashlib
 import logging
@@ -16,8 +17,45 @@ from app.utils.faiss_index import (
 from app.utils.rag_retrieval import retrieve_candidates
 from app.utils.rag_prompts import build_system_prompt, build_user_prompt
 from app.services.llm_service import stream_llm_response, get_available_providers
+from app.utils.latency_tracker import (
+    LatencyRecorder,
+    save_latency_report,
+    STAGE_CHUNKING,
+    STAGE_DB_WRITES,
+)
 
 logger = logging.getLogger(__name__)
+
+# Max chars per embedding chunk when splitting long resumes
+RAG_CHUNK_MAX_CHARS = 2000
+RAG_CHUNK_OVERLAP = 200
+
+
+def _chunk_text(text: str, max_chars: int = RAG_CHUNK_MAX_CHARS, overlap: int = RAG_CHUNK_OVERLAP) -> List[str]:
+    """Split long resume text into overlapping chunks for embedding."""
+    text = text.strip()
+    if not text or len(text) <= max_chars:
+        return [text] if text else []
+    chunks: List[str] = []
+    start = 0
+    while start < len(text):
+        end = min(start + max_chars, len(text))
+        chunks.append(text[start:end])
+        if end >= len(text):
+            break
+        start = max(0, end - overlap)
+    return chunks
+
+
+def _persist_rag_latency(collection_root: Path, recorder: LatencyRecorder, label: str) -> None:
+    """Merge RAG latency samples into collection reports."""
+    reports_dir = collection_root / "reports"
+    save_latency_report(reports_dir, recorder, label="combined_pipeline", filename="latency_report.json")
+    # RAG-only snapshot for this operation (no sidecar double-merge)
+    rag_report = recorder.summary(label=label)
+    (reports_dir / "latency_report_rag.json").write_text(
+        json.dumps(rag_report, indent=2), encoding="utf-8"
+    )
 
 
 def get_rag_base_path(company_id: str, collection_id: str) -> Path:
@@ -69,18 +107,27 @@ def build_rag_index(company_id: str, collection_id: str) -> dict:
     if not resume_files:
         raise ValueError("No processed resumes found")
     
-    # Prepare texts and mapping
-    resume_texts = []
-    resume_mapping = {}
+    recorder = LatencyRecorder()
     
-    for idx, resume_file in enumerate(resume_files):
-        text = resume_file.read_text(encoding='utf-8', errors='ignore')
-        resume_texts.append(text)
-        resume_mapping[idx] = resume_file.name
+    # Prepare texts and mapping (chunk long resumes)
+    resume_texts: List[str] = []
+    resume_mapping: Dict[int, str] = {}
+    
+    with recorder.stage(STAGE_CHUNKING):
+        vector_idx = 0
+        for resume_file in resume_files:
+            text = resume_file.read_text(encoding='utf-8', errors='ignore')
+            chunks = _chunk_text(text)
+            if not chunks:
+                chunks = [text] if text else [""]
+            for chunk in chunks:
+                resume_texts.append(chunk)
+                resume_mapping[vector_idx] = resume_file.name
+                vector_idx += 1
     
     # Generate embeddings
-    logger.info(f"Generating embeddings for {len(resume_texts)} resumes")
-    embeddings = generate_embeddings(resume_texts)
+    logger.info(f"Generating embeddings for {len(resume_texts)} resume chunks")
+    embeddings = generate_embeddings(resume_texts, recorder=recorder)
     
     # Setup RAG directories
     rag_base = get_rag_base_path(company_id, collection_id)
@@ -93,18 +140,19 @@ def build_rag_index(company_id: str, collection_id: str) -> dict:
     embeddings_backup = index_dir / "embeddings.npy"
     
     # Build and save index
-    build_index(embeddings, resume_mapping, index_path, mapping_path, meta_path)
+    with recorder.stage(STAGE_DB_WRITES):
+        build_index(embeddings, resume_mapping, index_path, mapping_path, meta_path)
+        np.save(embeddings_backup, embeddings)
     
-    # Save embeddings backup
-    np.save(embeddings_backup, embeddings)
-    
+    _persist_rag_latency(collection_root, recorder, label="rag_index_build")
     logger.info(f"RAG index built successfully for {collection_id}")
     
     return {
         "status": "completed",
         "num_vectors": len(resume_texts),
         "dimension": embeddings.shape[1],
-        "index_path": str(index_path.relative_to(collection_root))
+        "index_path": str(index_path.relative_to(collection_root)),
+        "latency": recorder.summary(label="rag_index_build"),
     }
 
 
@@ -190,6 +238,13 @@ def save_cached_response(cache_path: Path, query_hash: str, response: str) -> No
         json.dump(cache_data, f, indent=2)
 
 
+async def _stream_text_chunks(text: str, chunk_size: int = 24) -> AsyncGenerator[str, None]:
+    """Yield cached text in small chunks so the UI can stream smoothly."""
+    for i in range(0, len(text), chunk_size):
+        yield text[i : i + chunk_size]
+        await asyncio.sleep(0.012)
+
+
 async def process_rag_query(
     company_id: str,
     collection_id: str,
@@ -214,6 +269,7 @@ async def process_rag_query(
     Yields:
         Chunks of LLM response
     """
+    recorder = LatencyRecorder()
     try:
         collection_root = get_collection_root(company_id, collection_id)
         assert_collection_exists(collection_root)
@@ -235,7 +291,8 @@ async def process_rag_query(
         cached = get_cached_response(cache_path, query_hash)
         if cached:
             logger.info(f"Using cached response for query hash: {query_hash[:8]}")
-            yield cached
+            async for piece in _stream_text_chunks(cached):
+                yield piece
             return
         
         # Load index and mapping
@@ -247,7 +304,7 @@ async def process_rag_query(
         
         # Generate query embedding
         from app.utils.embeddings import generate_query_embedding
-        query_embedding = generate_query_embedding(query)
+        query_embedding = generate_query_embedding(query, recorder=recorder)
         
         # Retrieve candidates
         candidates = retrieve_candidates(
@@ -279,13 +336,18 @@ async def process_rag_query(
         
         # Stream LLM response
         full_response = ""
-        async for chunk in stream_llm_response(system_prompt, user_prompt, provider):
+        async for chunk in stream_llm_response(
+            system_prompt, user_prompt, provider, recorder=recorder
+        ):
             full_response += chunk
             yield chunk
         
         # Cache response
         if full_response and not full_response.startswith("Error:"):
-            save_cached_response(cache_path, query_hash, full_response)
+            with recorder.stage(STAGE_DB_WRITES):
+                save_cached_response(cache_path, query_hash, full_response)
+        
+        _persist_rag_latency(collection_root, recorder, label="rag_query")
         
     except Exception as e:
         logger.error(f"RAG query error: {e}", exc_info=True)

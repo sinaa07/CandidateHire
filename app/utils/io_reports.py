@@ -54,6 +54,9 @@ def get_report_paths(collection_root: Path) -> dict:
         "validation": collection_root / "reports" / "validation_report.json",
         "duplicates": collection_root / "reports" / "duplicate_report.json",
         "ranking_summary": collection_root / "reports" / "ranking_summary.json",
+        "latency": collection_root / "reports" / "latency_report.json",
+        "latency_rag": collection_root / "reports" / "latency_report_rag.json",
+        "latency_rank": collection_root / "reports" / "latency_report_rank.json",
         "ranking_json": collection_root / "outputs" / "ranking_results.json",
         "ranking_csv": collection_root / "outputs" / "ranking_results.csv",
         "meta": collection_root / "collection_meta.json"

@@ -3,18 +3,11 @@ from datetime import datetime, UTC
 import json
 import logging
 import os
-from typing import Dict, List, Tuple, Optional
 from multiprocessing import Pool, cpu_count, Manager
 from app.models.enums import ResumeStatus
-from app.utils.text_extraction import extract_text
-from app.utils.hashing import compute_sha256
-from app.utils.validation import validate_text
-from app.utils.section_parser import parse_sections, sections_to_dict
-from app.utils.ner.rules import extract_rule_based_entities
-from app.utils.ner.spacy_ner import extract_spacy_entities, _get_spacy_model
-from app.utils.ner.normalizer import normalize_entities
-from app.utils.ner.base import ExtractedEntities
-from app.utils.experience import compute_experience_signals
+from app.utils.ner.spacy_ner import _get_spacy_model
+from app.utils.latency_tracker import LatencyRecorder, save_latency_report
+from app.workers.resume_worker import process_resume_file
 import app.core.config as config
 #Phase 2 guarantees:
 #- No network calls
@@ -32,198 +25,6 @@ def _init_worker():
     # Preload spaCy model in this worker process
     _get_spacy_model()
     logger.debug(f"Worker process {os.getpid()} initialized with spaCy model")
-
-
-def _process_single_file(args: Tuple[Path, Path, Dict]) -> Dict:
-    """
-    Process a single resume file.
-    
-    This function is designed to be called by multiprocessing workers.
-    
-    Args:
-        args: Tuple of (resume_file, processed_dir, shared_hash_registry_dict)
-        
-    Returns:
-        Dict with keys: filename, status, reason, content_hash, duplicate_of
-    """
-    resume_file, processed_dir, shared_hash_registry = args
-    filename = resume_file.name
-    result = {
-        "filename": filename,
-        "status": None,
-        "reason": None,
-        "content_hash": None,
-        "duplicate_of": None
-    }
-    
-    try:
-        # Extract text (with automatic OCR fallback for image-based PDFs)
-        text = extract_text(resume_file, use_ocr_fallback=True)
-        
-        # Validate text
-        status = validate_text(text)
-        
-        if status == ResumeStatus.EMPTY:
-            result["status"] = ResumeStatus.EMPTY
-            result["reason"] = "No extractable text (file may be image-based, corrupted, or empty)"
-        elif status == ResumeStatus.OK:
-            # Compute SHA-256
-            content_hash = compute_sha256(text)
-            result["content_hash"] = content_hash
-            
-            # Check for duplicates (Manager().dict() operations are already thread-safe)
-            if content_hash in shared_hash_registry:
-                result["status"] = ResumeStatus.DUPLICATE
-                result["reason"] = f"Duplicate of {shared_hash_registry[content_hash]}"
-                result["duplicate_of"] = shared_hash_registry[content_hash]
-            else:
-                # Register hash (atomic operation on Manager dict)
-                shared_hash_registry[content_hash] = filename
-                result["status"] = ResumeStatus.OK
-                
-                # Save processed output
-                output_file = processed_dir / f"{resume_file.name}.txt"
-                output_file.write_text(text, encoding='utf-8')
-                
-                # Extract structured intelligence (sections, entities, experience)
-                try:
-                    intelligence = _extract_resume_intelligence(text, filename)
-                    
-                    # Use output_file stem (which is resume_file.name without .txt extension)
-                    base_name = output_file.stem
-                    
-                    # Save sections.json
-                    sections_file = processed_dir / f"{base_name}_sections.json"
-                    sections_file.write_text(
-                        json.dumps(intelligence["sections"], indent=2),
-                        encoding='utf-8'
-                    )
-                    
-                    # Save entities.json
-                    entities_file = processed_dir / f"{base_name}_entities.json"
-                    entities_file.write_text(
-                        json.dumps(intelligence["entities"], indent=2),
-                        encoding='utf-8'
-                    )
-                    
-                    # Save experience.json
-                    experience_file = processed_dir / f"{base_name}_experience.json"
-                    experience_file.write_text(
-                        json.dumps(intelligence["experience"], indent=2),
-                        encoding='utf-8'
-                    )
-                except Exception as e:
-                    # Log but don't fail the entire processing
-                    logger.warning(f"Failed to extract intelligence for {filename}: {e}")
-                    result["status"] = ResumeStatus.FAILED
-                    result["reason"] = f"Intelligence extraction failed: {str(e)}"
-        else:
-            result["status"] = status
-            result["reason"] = "Validation failed"
-            
-    except KeyboardInterrupt:
-        # Allow graceful cancellation
-        logger.warning(f"Processing interrupted for {filename}")
-        raise
-    except Exception as e:
-        result["status"] = ResumeStatus.FAILED
-        error_msg = str(e)
-        if "Unsupported file type" in error_msg:
-            result["reason"] = f"Unsupported format: {resume_file.suffix} (supported: .pdf, .docx, .txt)"
-        elif "Failed to extract text" in error_msg:
-            result["reason"] = f"Extraction error: {error_msg}"
-        elif "timeout" in error_msg.lower():
-            result["reason"] = f"Processing timeout: {error_msg}"
-        else:
-            result["reason"] = f"Processing failed: {error_msg}"
-        logger.error(f"Failed to process {filename}: {e}", exc_info=True)
-    
-    return result
-
-
-def _extract_resume_intelligence(text: str, filename: str) -> Dict:
-    """
-    Extract structured intelligence from resume text.
-    
-    This function:
-    1. Parses sections
-    2. Extracts entities (rule-based + spaCy)
-    3. Normalizes entities
-    4. Computes experience signals
-    
-    Args:
-        text: Resume text
-        filename: Resume filename (for logging)
-        
-    Returns:
-        Dict with sections, entities, and experience data
-    """
-    try:
-        # 1. Parse sections (with boundaries for RAG highlighting)
-        sections, boundaries = parse_sections(text, return_boundaries=True)
-        sections_dict = sections_to_dict(sections, boundaries=boundaries)
-        
-        # 2. Extract entities (rule-based first)
-        rule_entities = extract_rule_based_entities(text)
-        
-        # 3. Extract spaCy entities (organizations, roles, locations)
-        spacy_entities = extract_spacy_entities(text)
-        
-        # 4. Merge entities
-        entities_dict = rule_entities.to_dict()
-        entities_dict["organizations"].extend(spacy_entities["organizations"])
-        entities_dict["roles"].extend(spacy_entities["roles"])
-        entities_dict["locations"].extend(spacy_entities["locations"])
-        
-        # Deduplicate lists
-        entities_dict["organizations"] = sorted(list(set(entities_dict["organizations"])))
-        entities_dict["roles"] = sorted(list(set(entities_dict["roles"])))
-        entities_dict["locations"] = sorted(list(set(entities_dict["locations"])))
-        
-        # 5. Normalize entities
-        entities_dict = normalize_entities(entities_dict)
-        
-        # 6. Reconstruct ExtractedEntities for experience calculation
-        normalized_entities = ExtractedEntities.from_dict(entities_dict)
-        
-        # 7. Compute experience signals
-        experience_signals = compute_experience_signals(normalized_entities)
-        
-        return {
-            "sections": sections_dict,
-            "entities": entities_dict,
-            "experience": experience_signals
-        }
-    except Exception as e:
-        logger.warning(f"Failed to extract intelligence from {filename}: {e}")
-        # Return empty structure on failure
-        return {
-            "sections": {
-                "summary": "",
-                "experience": "",
-                "skills": "",
-                "education": "",
-                "projects": "",
-                "other": ""
-            },
-            "entities": {
-                "skills": {},
-                "roles": [],
-                "organizations": [],
-                "education": {},
-                "experience": {},
-                "locations": []
-            },
-            "experience": {
-                "experience_depth": 0.0,
-                "stability": 0.0,
-                "years_min": None,
-                "years_max": None,
-                "role_count": 0,
-                "earliest_date": None,
-                "latest_date": None
-            }
-        }
 
 
 def process_collection(company_id: str, collection_id: str) -> dict:
@@ -317,6 +118,8 @@ def process_collection(company_id: str, collection_id: str) -> dict:
         "empty": 0,
         "duplicate": 0
     }
+    latency_recorder = LatencyRecorder()
+    latency_report_path = None
     
     try:
         if use_multiprocessing:
@@ -327,13 +130,19 @@ def process_collection(company_id: str, collection_id: str) -> dict:
             # Use multiprocessing Pool with initializer to preload spaCy model per worker
             with Pool(processes=num_workers, initializer=_init_worker) as pool:
                 # Process files in parallel
-                results = pool.map(_process_single_file, file_args)
+                results = pool.map(process_resume_file, file_args)
         else:
             # Sequential processing for small batches (avoids multiprocessing overhead)
             logger.info(f"Processing {len(resume_files)} files sequentially (small batch)")
             # Preload spaCy model in main process
             _get_spacy_model()
-            results = [_process_single_file(args) for args in file_args]
+            results = [process_resume_file(args) for args in file_args]
+        
+        # Merge per-file latency samples
+        for result in results:
+            samples = result.get("latency_samples")
+            if samples:
+                latency_recorder.merge_samples(samples)
         
         # Process results
         for result in results:
@@ -342,11 +151,19 @@ def process_collection(company_id: str, collection_id: str) -> dict:
             reason = result["reason"]
             
             # Record validation result
-            validation_files.append({
+            entry = {
                 "filename": filename,
                 "status": status.value if status else None,
-                "reason": reason
-            })
+                "reason": reason,
+            }
+            extraction = result.get("extraction")
+            if extraction:
+                entry["extraction_method"] = extraction.get("method")
+                entry["extraction_state"] = extraction.get("state")
+                entry["ocr_triggered"] = extraction.get("ocr_triggered")
+                entry["char_count"] = extraction.get("char_count")
+                entry["latency_ms"] = extraction.get("latency_ms")
+            validation_files.append(entry)
             
             # Update stats
             if status == ResumeStatus.OK:
@@ -392,6 +209,15 @@ def process_collection(company_id: str, collection_id: str) -> dict:
         encoding='utf-8'
     )
     
+    # 5b. Persist latency report (p50 / p95 / p99 per stage)
+    if latency_recorder.to_samples_dict():
+        latency_report_path = save_latency_report(
+            reports_dir,
+            latency_recorder,
+            label="phase2_processing",
+        )
+        logger.info(f"Latency report saved: {latency_report_path}")
+    
     # 6. Update collection_meta.json
     meta_file = collection_root / "collection_meta.json"
     meta = json.loads(meta_file.read_text()) if meta_file.exists() else {}
@@ -403,11 +229,18 @@ def process_collection(company_id: str, collection_id: str) -> dict:
     
     logger.info("Phase-2 processing completed")
     
-    return {
+    reports_generated = [
+        "validation_report.json",
+        "duplicate_report.json",
+    ]
+    if latency_report_path and latency_report_path.exists():
+        reports_generated.append("latency_report.json")
+    
+    response = {
         "status": "completed",
         "stats": stats,
-        "reports_generated": [
-            "validation_report.json",
-            "duplicate_report.json"
-        ]
+        "reports_generated": reports_generated,
     }
+    if latency_report_path and latency_report_path.exists():
+        response["latency"] = json.loads(latency_report_path.read_text(encoding="utf-8"))
+    return response

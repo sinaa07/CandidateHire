@@ -1,0 +1,39 @@
+ALICE CHEN
+alice.chen@email.com | San Francisco, CA | linkedin.com/in/alicechen
+
+SUMMARY
+Backend software engineer with 6 years building APIs, data pipelines, and cloud services.
+Strong in Python, FastAPI, PostgreSQL, and Docker. Experienced in agile teams shipping
+production features for B2B SaaS products.
+
+WORK EXPERIENCE
+Senior Software Engineer — NovaPay Inc., San Francisco, CA
+Jan 2021 - Present
+- Designed and maintained FastAPI microservices handling 2M+ daily payment events.
+- Migrated monolith authentication to OAuth2 with Redis session caching.
+- Reduced p95 API latency by 35% through query optimization and connection pooling.
+- Mentored two junior engineers on code review practices and testing standards.
+
+Software Engineer — DataLoop Systems, Oakland, CA
+Jun 2018 - Dec 2020
+- Built ETL pipelines ingesting CSV and JSON feeds into PostgreSQL warehouses.
+- Implemented Celery workers for async document processing and email notifications.
+- Introduced pytest coverage gates in CI, increasing unit test coverage from 40% to 78%.
+- Collaborated with product managers to define technical requirements for reporting APIs.
+
+Junior Developer — Campus Labs, Berkeley, CA
+Aug 2016 - May 2018
+- Developed internal Django tools for lab equipment scheduling and inventory tracking.
+- Wrote SQL reports used by operations staff for quarterly planning.
+
+EDUCATION
+Master of Science, Computer Science — University of California, Berkeley, 2016
+Bachelor of Science, Computer Science — University of California, Davis, 2014
+
+SKILLS
+Python, FastAPI, Django, Flask, PostgreSQL, MySQL, Redis, Docker, Kubernetes, AWS,
+Git, REST APIs, GraphQL, pytest, scikit-learn, agile, scrum, microservices, Linux
+
+PROJECTS
+Open-source contributor to a FastAPI pagination library; implemented cursor-based paging
+and documentation examples adopted by 12 downstream projects.

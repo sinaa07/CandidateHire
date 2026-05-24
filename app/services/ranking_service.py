@@ -28,12 +28,19 @@ from app.utils.tfidf_builder import (
     compute_section_aware_similarity
 )
 from app.utils.ner.base import ExtractedEntities
+from app.utils.latency_tracker import (
+    LatencyRecorder,
+    save_latency_report,
+    STAGE_DB_WRITES,
+    STAGE_PARSING,
+)
 
 logger = logging.getLogger(__name__)
 
 def rank_collection(company_id: str, collection_id: str, jd_text: str, top_k: int | None = None) -> dict:
     """Core Phase-3 ranking orchestration."""
     logger.info(f"Ranking collection {collection_id}")
+    recorder = LatencyRecorder()
     
     collection_root = config.COLLECTIONS_ROOT / company_id / collection_id
     processed_dir = collection_root / "processed"
@@ -84,7 +91,8 @@ def rank_collection(company_id: str, collection_id: str, jd_text: str, top_k: in
         
         # Parse sections if not loaded
         if sections is None:
-            sections = parse_sections(text)
+            with recorder.stage(STAGE_PARSING):
+                sections = parse_sections(text)
         resume_sections_list.append(sections)
         
         # Try to load entities from JSON (if available from Phase 2)
@@ -175,9 +183,10 @@ def rank_collection(company_id: str, collection_id: str, jd_text: str, top_k: in
         results = results[:top_k]
     
     ranking_json = outputs_dir / "ranking_results.json"
-    ranking_json.write_text(json.dumps(results, indent=2), encoding='utf-8')
-    
     ranking_csv = outputs_dir / "ranking_results.csv"
+    with recorder.stage(STAGE_DB_WRITES):
+        ranking_json.write_text(json.dumps(results, indent=2), encoding='utf-8')
+    
     with open(ranking_csv, 'w', newline='', encoding='utf-8') as f:
         if results:
             fieldnames = ["rank", "filename", "tfidf_score", "skill_score", "final_score"]
@@ -203,7 +212,8 @@ def rank_collection(company_id: str, collection_id: str, jd_text: str, top_k: in
     }
     
     summary_file = reports_dir / "ranking_summary.json"
-    summary_file.write_text(json.dumps(ranking_summary, indent=2), encoding='utf-8')
+    with recorder.stage(STAGE_DB_WRITES):
+        summary_file.write_text(json.dumps(ranking_summary, indent=2), encoding='utf-8')
     
     artifacts_dir = ensure_artifacts_dir(collection_root)
     
@@ -227,11 +237,15 @@ def rank_collection(company_id: str, collection_id: str, jd_text: str, top_k: in
         "ranking_status": "completed",
         "ranked_at": datetime.now(UTC).isoformat()
     })
-    meta_file.write_text(json.dumps(meta, indent=2), encoding='utf-8')
+    with recorder.stage(STAGE_DB_WRITES):
+        meta_file.write_text(json.dumps(meta, indent=2), encoding='utf-8')
+    
+    if recorder.to_samples_dict():
+        save_latency_report(reports_dir, recorder, label="phase3_ranking", filename="latency_report_rank.json")
     
     logger.info("Phase-3 ranking completed")
     
-    return {
+    response = {
         "status": "completed",
         "resume_count": len(resume_filenames),
         "ranked_count": len(results),
@@ -240,5 +254,8 @@ def rank_collection(company_id: str, collection_id: str, jd_text: str, top_k: in
             "ranking_results.json",
             "ranking_results.csv",
             "ranking_summary.json"
-        ]
+        ],
     }
+    if recorder.to_samples_dict():
+        response["latency"] = recorder.summary(label="phase3_ranking")
+    return response

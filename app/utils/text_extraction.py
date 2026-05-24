@@ -1,142 +1,97 @@
 from pathlib import Path
 import logging
-from pypdf import PdfReader
+from typing import Optional
 from docx import Document
-import app.core.config as config
-from app.utils.ocr_extraction import (
-    extract_text_with_ocr,
-    should_use_ocr,
-    is_ocr_available
-)
+
+from app.services.ocr_service import extract_pdf_resume
+from app.utils.latency_tracker import LatencyRecorder, STAGE_TEXT_EXTRACTION
 
 logger = logging.getLogger(__name__)
 
-def extract_text(file_path: Path, use_ocr_fallback: bool = True) -> str:
+
+def extract_text(
+    file_path: Path,
+    use_ocr_fallback: bool = True,
+    recorder: Optional[LatencyRecorder] = None,
+) -> str:
     """
     Extract plain text from resume files.
-    
-    For PDFs, this function:
-    1. First attempts regular text extraction
-    2. Checks if extracted text is below threshold
-    3. Falls back to OCR if needed (when use_ocr_fallback=True)
-    
+
+    PDFs use smart OCR gating via ``ocr_service`` when ``use_ocr_fallback`` is True.
+    DOCX and TXT use direct extraction only.
+
     Args:
-        file_path: Path to the file
-        use_ocr_fallback: Whether to use OCR as fallback for PDFs (default: True)
-    
+        file_path: Path to the file.
+        use_ocr_fallback: For PDFs, enable smart OCR gating (default True).
+        recorder: Optional latency recorder.
+
     Returns:
-        str: Extracted text (empty string if no text found)
-        
+        Extracted text (empty string if none found).
+
     Raises:
-        Exception: If file is unreadable or unsupported
+        Exception: If the file is unreadable or unsupported.
     """
     try:
         suffix = file_path.suffix.lower()
-        
-        if suffix == '.pdf':
-            return _extract_pdf(file_path, use_ocr_fallback=use_ocr_fallback)
-        elif suffix == '.docx':
-            return _extract_docx(file_path)
-        elif suffix == '.txt':
-            return _extract_txt(file_path)
-        else:
-            raise ValueError(f"Unsupported file type: {suffix}")
-    except Exception as e:
-        raise Exception(f"Failed to extract text from {file_path.name}") from e
 
-def _extract_pdf(file_path: Path, use_ocr_fallback: bool = True) -> str:
-    """
-    Extract text from PDF with OCR fallback for image-based PDFs.
-    
-    Process:
-    1. Try regular PDF text extraction
-    2. If text is below threshold, attempt OCR
-    3. Return best available result
-    
-    Args:
-        file_path: Path to PDF file
-        use_ocr_fallback: Whether to use OCR if regular extraction is insufficient
-        
-    Returns:
-        Extracted text string
-    """
-    # Step 1: Try regular PDF text extraction
-    text = []
-    try:
-        with open(file_path, 'rb') as f:
-            reader = PdfReader(f)
-            if len(reader.pages) == 0:
-                raise ValueError("PDF has no pages")
-            for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text and page_text.strip():
-                    text.append(page_text.strip())
-        result = ' '.join(text).strip()
-        
-        # Step 2: Check if we need OCR fallback
-        if use_ocr_fallback and config.OCR_ENABLED:
-            if not result or should_use_ocr(result, config.OCR_MIN_CHAR_THRESHOLD):
-                logger.info(f"Regular extraction yielded {len(result)} chars for {file_path.name}, attempting OCR fallback")
-                
-                if is_ocr_available():
-                    try:
-                        ocr_result = extract_text_with_ocr(file_path)
-                        if ocr_result and len(ocr_result) > len(result):
-                            logger.info(f"OCR extraction successful: {len(ocr_result)} characters (vs {len(result)} from regular extraction)")
-                            return ocr_result
-                        elif ocr_result:
-                            logger.info(f"OCR extracted {len(ocr_result)} characters, but regular extraction was better")
-                            # Return OCR result if regular extraction was empty/too short
-                            if not result or len(result) < config.OCR_MIN_CHAR_THRESHOLD:
-                                return ocr_result
-                    except Exception as ocr_error:
-                        logger.warning(f"OCR fallback failed for {file_path.name}: {ocr_error}")
-                        # Continue with regular extraction result if OCR fails
-                        if result:
-                            return result
-                else:
-                    logger.warning(f"OCR not available for {file_path.name}, using regular extraction result")
-        
-        # Step 3: Return regular extraction result (or raise if empty)
-        if not result:
-            if use_ocr_fallback and config.OCR_ENABLED and is_ocr_available():
-                # Last attempt with OCR
-                try:
-                    return extract_text_with_ocr(file_path)
-                except Exception as e:
-                    raise ValueError(f"PDF appears to be image-based (no extractable text). OCR failed: {str(e)}")
-            else:
-                raise ValueError("PDF appears to be image-based (no extractable text). OCR required but not available or disabled.")
-        
-        return result
-        
-    except ValueError as e:
-        # Re-raise ValueError (empty PDF, image-based, etc.)
-        raise
-    except Exception as e:
-        # For other errors, try OCR if enabled
-        if use_ocr_fallback and config.OCR_ENABLED and is_ocr_available():
-            logger.warning(f"Regular PDF extraction failed for {file_path.name}: {e}. Attempting OCR fallback.")
-            try:
-                return extract_text_with_ocr(file_path)
-            except Exception as ocr_error:
-                raise Exception(f"PDF extraction error: {str(e)}. OCR fallback also failed: {str(ocr_error)}") from e
-        else:
-            raise Exception(f"PDF extraction error: {str(e)}") from e
+        if suffix == ".pdf":
+            if use_ocr_fallback:
+                result = extract_pdf_resume(file_path, recorder=recorder)
+                return result.get("text", "")
+            return _extract_pdf_direct_only(file_path, recorder=recorder)
+        if suffix == ".docx":
+            return _extract_docx(file_path, recorder=recorder)
+        if suffix == ".txt":
+            return _extract_txt(file_path, recorder=recorder)
+        raise ValueError(f"Unsupported file type: {suffix}")
+    except Exception as exc:
+        raise Exception(f"Failed to extract text from {file_path.name}") from exc
 
-def _extract_docx(file_path: Path) -> str:
+
+def _extract_pdf_direct_only(
+    file_path: Path,
+    recorder: Optional[LatencyRecorder] = None,
+) -> str:
+    """Extract PDF text without OCR (direct engines only)."""
+    from app.services.ocr_service import _direct_extract_pdf
+
+    if recorder:
+        with recorder.stage(STAGE_TEXT_EXTRACTION):
+            text, _, _ = _direct_extract_pdf(file_path)
+    else:
+        text, _, _ = _direct_extract_pdf(file_path)
+    return text
+
+
+def _extract_docx(file_path: Path, recorder: Optional[LatencyRecorder] = None) -> str:
     try:
-        doc = Document(file_path)
-        text = [paragraph.text.strip() for paragraph in doc.paragraphs if paragraph.text.strip()]
-        result = ' '.join(text).strip()
+        if recorder:
+            with recorder.stage(STAGE_TEXT_EXTRACTION):
+                result = _docx_text_extract(file_path)
+        else:
+            result = _docx_text_extract(file_path)
         if not result:
             raise ValueError("DOCX file appears to be empty or contains no extractable text")
         return result
-    except Exception as e:
-        if "empty" in str(e).lower() or "no extractable text" in str(e).lower():
+    except Exception as exc:
+        if "empty" in str(exc).lower() or "no extractable text" in str(exc).lower():
             raise
-        raise Exception(f"DOCX extraction error: {str(e)}") from e
+        raise Exception(f"DOCX extraction error: {exc}") from exc
 
-def _extract_txt(file_path: Path) -> str:
-    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-        return f.read().strip()
+
+def _docx_text_extract(file_path: Path) -> str:
+    doc = Document(file_path)
+    text = [paragraph.text.strip() for paragraph in doc.paragraphs if paragraph.text.strip()]
+    return " ".join(text).strip()
+
+
+def _extract_txt(file_path: Path, recorder: Optional[LatencyRecorder] = None) -> str:
+    if recorder:
+        with recorder.stage(STAGE_TEXT_EXTRACTION):
+            return _txt_read(file_path)
+    return _txt_read(file_path)
+
+
+def _txt_read(file_path: Path) -> str:
+    with open(file_path, "r", encoding="utf-8", errors="ignore") as handle:
+        return handle.read().strip()
