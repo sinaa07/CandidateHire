@@ -1,9 +1,8 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
-import { Upload, AlertCircle } from "lucide-react"
+import { Upload, AlertCircle, X, Package } from "lucide-react"
 import { useAppContext } from "@/contexts/AppContext"
 import { createCollection } from "@/utils/api"
 import { saveCollectionToStorage } from "@/utils/storage"
@@ -15,11 +14,6 @@ export function Phase1Upload() {
   const [companyId, setLocalCompanyId] = useState("")
   const [zipFile, setZipFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
-
-  const handleCompanyIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalCompanyId(e.target.value)
-    setError(null)
-  }
 
   const handleFileSelect = (file: File) => {
     if (file.name.endsWith(".zip")) {
@@ -45,9 +39,7 @@ export function Phase1Upload() {
     e.stopPropagation()
     setDragActive(false)
     const files = e.dataTransfer.files
-    if (files?.[0]) {
-      handleFileSelect(files[0])
-    }
+    if (files?.[0]) handleFileSelect(files[0])
   }
 
   const handleCreateCollection = async () => {
@@ -61,19 +53,15 @@ export function Phase1Upload() {
 
     try {
       const response = await createCollection(companyId, zipFile)
-      const collectionId = response.collection_id
-
-      setCollectionId(collectionId)
+      setCollectionId(response.collection_id)
       setCompanyId(companyId)
-
       saveCollectionToStorage({
-        id: collectionId,
+        id: response.collection_id,
         company_id: companyId,
         created_at: new Date().toISOString(),
         status: "uploaded",
         last_accessed: new Date().toISOString(),
       })
-
       setPhase(2)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create collection")
@@ -83,85 +71,103 @@ export function Phase1Upload() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-12">
-      <div className="text-center mb-12">
-        <h2 className="text-4xl font-bold text-[#262626] mb-3">Upload Resume Collection</h2>
-        <p className="text-[#737373]">Upload your resume collection as a ZIP file</p>
-      </div>
+    <div className="px-6 py-10 max-w-2xl mx-auto">
+      <header className="mb-8">
+        <h2 className="text-2xl font-bold text-foreground">Collection Upload</h2>
+        <p className="text-muted-foreground mt-1">
+          Upload a ZIP of resumes and assign a company ID to start screening.
+        </p>
+      </header>
 
       <div className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-[#262626] mb-2">Company ID</label>
+        <div className="dashboard-card p-6">
+          <label className="block text-sm font-semibold text-foreground mb-2">Company ID</label>
           <input
             type="text"
             value={companyId}
-            onChange={handleCompanyIdChange}
+            onChange={(e) => {
+              setLocalCompanyId(e.target.value)
+              setError(null)
+            }}
             placeholder="Enter company ID (e.g., acme, techcorp)"
-            className="w-full px-4 py-3 border border-[#E5E5E5] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6366F1] focus:border-transparent bg-white"
+            className="dashboard-input"
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-[#262626] mb-2">Resume Collection (ZIP File)</label>
-          <div
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-lg p-12 text-center transition-all ${
-              dragActive ? "border-[#6366F1] bg-[#EEF2FF]" : "border-[#E5E5E5] hover:border-[#6366F1] bg-white"
-            }`}
-          >
-            <input
-              type="file"
-              accept=".zip"
-              onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
-              className="hidden"
-              id="zip-upload"
-            />
-            <label htmlFor="zip-upload" className="cursor-pointer block">
-              <Upload size={48} className={`mx-auto mb-4 ${dragActive ? "text-[#6366F1]" : "text-[#737373]"}`} />
-              <p className="text-[#262626] font-semibold text-lg mb-1">Drop ZIP or Browse</p>
-              <p className="text-[#737373] text-sm">Supported formats: .zip</p>
-            </label>
-          </div>
+        <div
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+          className={`relative rounded-xl border-2 border-dashed px-6 py-16 text-center transition-theme cursor-pointer ${
+            dragActive
+              ? "border-primary bg-primary-50"
+              : "border-border bg-card hover:border-primary hover:bg-primary-50/50"
+          }`}
+        >
+          <input
+            type="file"
+            accept=".zip"
+            onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+            className="hidden"
+            id="zip-upload"
+          />
+          <label htmlFor="zip-upload" className="cursor-pointer flex flex-col items-center gap-4">
+            <div
+              className={`w-16 h-16 rounded-full flex items-center justify-center transition-theme ${
+                dragActive ? "bg-primary text-white" : "bg-muted text-primary"
+              }`}
+            >
+              <Upload size={32} />
+            </div>
+            <div>
+              <p className="text-foreground font-semibold text-lg">Drop ZIP or Browse</p>
+              <p className="text-muted-foreground text-sm mt-1">Supported formats: .zip</p>
+            </div>
+          </label>
         </div>
 
         {zipFile && (
-          <div className="bg-white border border-[#E5E5E5] rounded-lg p-4 shadow-card">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#10B981] rounded-lg flex items-center justify-center">
-                  <span className="text-white text-xl">📦</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-[#262626]">{zipFile.name}</p>
-                  <p className="text-xs text-[#737373]">{formatFileSize(zipFile.size)}</p>
-                </div>
+          <div className="dashboard-card p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                <Package size={20} className="text-primary" />
               </div>
-              <button
-                onClick={() => setZipFile(null)}
-                className="text-[#737373] hover:text-[#262626] transition-colors"
-              >
-                <AlertCircle size={20} />
-              </button>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground truncate">{zipFile.name}</p>
+                <p className="text-xs text-muted-foreground">{formatFileSize(zipFile.size)}</p>
+              </div>
             </div>
+            <button
+              onClick={() => setZipFile(null)}
+              className="p-2 text-muted-foreground hover:text-error hover:bg-error-50 rounded-lg transition-theme"
+              aria-label="Remove file"
+            >
+              <X size={18} />
+            </button>
           </div>
         )}
 
         {error && (
-          <div className="bg-[#FEE2E2] border border-[#EF4444] rounded-lg p-4 flex gap-3">
-            <AlertCircle size={20} className="text-[#EF4444] flex-shrink-0" />
-            <p className="text-sm text-[#DC2626]">{error}</p>
+          <div className="bg-error-50 border border-error-100 rounded-lg p-4 flex gap-3">
+            <AlertCircle size={20} className="text-error shrink-0" />
+            <p className="text-sm text-error font-medium">{error}</p>
           </div>
         )}
 
         <button
           onClick={handleCreateCollection}
           disabled={!companyId.trim() || !zipFile || loading}
-          className="w-full gradient-primary text-white py-4 rounded-lg font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-card hover:shadow-lg hover:-translate-y-0.5"
+          className="btn-primary flex items-center justify-center gap-2"
         >
-          {loading ? "Creating Collection..." : "Create Collection →"}
+          {loading ? (
+            <>
+              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Creating Collection...
+            </>
+          ) : (
+            <>Create Collection →</>
+          )}
         </button>
       </div>
     </div>

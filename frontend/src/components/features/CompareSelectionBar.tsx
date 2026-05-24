@@ -13,22 +13,24 @@ export function CompareSelectionBar({ selectedCount, onCompare }: CompareSelecti
   if (selectedCount === 0) return null
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-4">
-      <div className="max-w-7xl mx-auto flex items-center justify-between">
-        <div className="text-sm text-gray-700">
-          <span className="font-medium">Selected: {selectedCount} candidates</span>
-          <div className="mt-1 flex gap-2">
+    <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border shadow-lg p-4 z-30">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <div>
+          <span className="text-sm font-medium text-foreground">{selectedCount} candidates selected</span>
+          <div className="mt-1 flex flex-wrap gap-2">
             {selectedForComparison.map((filename) => (
-              <span key={filename} className="text-xs bg-gray-100 px-2 py-1 rounded">
-                {filename.substring(0, 20)}...
+              <span
+                key={filename}
+                className="text-xs bg-muted px-2 py-1 rounded-md border border-border font-mono"
+              >
+                {filename.substring(0, 24)}...
               </span>
             ))}
           </div>
         </div>
-
         <button
           onClick={onCompare}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+          className="px-6 py-2.5 gradient-primary text-white rounded-lg font-medium hover:opacity-90 transition-theme shrink-0"
         >
           Compare
         </button>

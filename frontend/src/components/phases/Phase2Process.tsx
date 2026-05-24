@@ -6,12 +6,19 @@ import { useAppContext } from "@/contexts/AppContext"
 import { processCollection, getReport } from "@/utils/api"
 
 export function Phase2Process() {
-  const { currentCollection, setProcessingResults, setPhase, setLoading, setError, error, loading } = useAppContext()
+  const { currentCollection, setProcessingResults, setPhase, setLoading, setError, error, loading } =
+    useAppContext()
   const { collection_id, company_id } = currentCollection
 
   const [isProcessing, setIsProcessing] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
-  const [stats, setStats] = useState<any>(null)
+  const [stats, setStats] = useState<{
+    total_files: number
+    ok: number
+    failed: number
+    empty: number
+    duplicate: number
+  } | null>(null)
 
   const handleStartProcessing = async () => {
     if (!collection_id || !company_id) {
@@ -25,28 +32,22 @@ export function Phase2Process() {
 
     try {
       await processCollection(collection_id, company_id)
-
-      // Fetch report to get stats
       const report = await getReport(collection_id, company_id)
-      // validation_report has stats at the top level (spread from stats object)
-      const validationReport = report.phase2.validation_report
-      const statsData = validationReport ? {
-        total_files: validationReport.total_files || 0,
-        ok: validationReport.ok || 0,
-        failed: validationReport.failed || 0,
-        empty: validationReport.empty || 0,
-        duplicate: validationReport.duplicate || 0,
-      } : {
-        total_files: 0,
-        ok: 0,
-        failed: 0,
-        empty: 0,
-        duplicate: 0,
-      }
+      const validationReport = report.phase2?.validation_report
+      const statsData = validationReport
+        ? {
+            total_files: validationReport.total_files || 0,
+            ok: validationReport.ok || 0,
+            failed: validationReport.failed || 0,
+            empty: validationReport.empty || 0,
+            duplicate: validationReport.duplicate || 0,
+          }
+        : { total_files: 0, ok: 0, failed: 0, empty: 0, duplicate: 0 }
 
       setStats(statsData)
       setProcessingResults(statsData)
       setIsCompleted(true)
+      setIsProcessing(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process collection")
       setIsProcessing(false)
@@ -55,120 +56,96 @@ export function Phase2Process() {
     }
   }
 
-  const progress = stats ? Math.round((stats.ok / stats.total_files) * 100) : 0
+  const progress = stats && stats.total_files > 0 ? Math.round((stats.ok / stats.total_files) * 100) : 0
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-12">
-      <div className="mb-8">
-        <h2 className="text-4xl font-bold text-[#262626] mb-2">Processing Resumes</h2>
-        <p className="text-[#737373]">Extract and validate resume data from your collection</p>
-      </div>
+    <div className="px-6 py-10 max-w-2xl mx-auto">
+      <header className="mb-8 text-center">
+        <h2 className="text-2xl font-bold text-foreground">Processing & Validation</h2>
+        <p className="text-muted-foreground mt-1">
+          Extract text from resumes and detect duplicates before ranking.
+        </p>
+        {collection_id && (
+          <p className="text-xs font-mono text-muted-foreground mt-3 bg-muted px-3 py-2 rounded-lg inline-block border border-border">
+            {collection_id.substring(0, 30)}...
+          </p>
+        )}
+      </header>
 
-      <div className="space-y-6">
-        {currentCollection.collection_id && (
-          <div className="text-sm text-[#737373] bg-white border border-[#E5E5E5] p-3 rounded-lg font-mono">
-            Collection ID: {currentCollection.collection_id.substring(0, 30)}...
+      {!isProcessing && !isCompleted && (
+        <div className="dashboard-card p-8 text-center">
+          <div className="w-20 h-20 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <span className="text-4xl">⚙️</span>
           </div>
-        )}
+          <p className="text-foreground font-semibold text-lg mb-6">Ready to extract and validate resume data</p>
+          <button
+            onClick={handleStartProcessing}
+            disabled={loading}
+            className="px-8 py-3 gradient-primary text-white rounded-lg font-semibold disabled:opacity-50 hover:opacity-90 transition-theme shadow-sm"
+          >
+            {loading ? "Starting..." : "Start Processing →"}
+          </button>
+        </div>
+      )}
 
-        {!isProcessing && !isCompleted && (
-          <div className="bg-white border border-[#E5E5E5] rounded-lg p-8 shadow-card text-center">
-            <div className="w-16 h-16 bg-[#F5F5F5] rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl">⚙️</span>
-            </div>
-            <p className="text-[#262626] font-medium mb-6">Ready to extract and validate resume data</p>
-            <button
-              onClick={handleStartProcessing}
-              disabled={loading}
-              className="px-6 py-3 gradient-primary text-white rounded-lg font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-card"
-            >
-              {loading ? "Starting..." : "Start Processing →"}
-            </button>
+      {isProcessing && (
+        <div className="dashboard-card p-8 text-center space-y-6">
+          <Loader size={48} className="text-primary animate-spin mx-auto" />
+          <div>
+            <h3 className="text-lg font-semibold text-foreground">Processing resumes...</h3>
+            <p className="text-sm text-muted-foreground mt-1">Extracting text and validating content</p>
           </div>
-        )}
+          <div className="w-full bg-muted h-3 rounded-full overflow-hidden">
+            <div
+              className="gradient-success h-full rounded-full transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p className="text-sm font-semibold text-foreground">Progress: {progress}%</p>
+        </div>
+      )}
 
-        {isProcessing && (
-          <div className="bg-white border border-[#E5E5E5] rounded-lg p-8 shadow-card">
-            <div className="text-center mb-6">
-              <Loader size={48} className="mx-auto text-[#6366F1] animate-spin mb-4" />
-              <p className="text-[#262626] font-semibold text-lg mb-2">Processing resumes...</p>
-              <p className="text-[#737373] text-sm">Extracting text and validating content</p>
+      {isCompleted && stats && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-3 bg-success-50 border border-success-100 text-success p-4 rounded-lg">
+            <CheckCircle2 size={24} />
+            <span className="font-semibold">Processing Complete</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="dashboard-card p-5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Files</p>
+              <p className="text-3xl font-bold text-foreground mt-1">{stats.total_files}</p>
             </div>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm text-[#737373] mb-2">
-                  <span>Progress</span>
-                  <span className="font-semibold text-[#262626]">{progress}%</span>
-                </div>
-                <div className="w-full bg-[#F5F5F5] rounded-full h-3 overflow-hidden">
-                  <div
-                    className="gradient-success h-full transition-all duration-500 ease-out rounded-full"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-              </div>
-              {stats && (
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#E5E5E5]">
-                  <div>
-                    <p className="text-xs text-[#737373] mb-1">Processed</p>
-                    <p className="text-2xl font-bold text-[#10B981]">{stats.ok}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-[#737373] mb-1">Total</p>
-                    <p className="text-2xl font-bold text-[#262626]">{stats.total_files}</p>
-                  </div>
-                </div>
-              )}
+            <div className="dashboard-card p-5 border-success/30 bg-success-50">
+              <p className="text-xs font-medium text-success uppercase tracking-wide">✓ Processed</p>
+              <p className="text-3xl font-bold text-success mt-1">{stats.ok}</p>
+            </div>
+            <div className="dashboard-card p-5 border-error/30 bg-error-50">
+              <p className="text-xs font-medium text-error uppercase tracking-wide">✗ Failed</p>
+              <p className="text-3xl font-bold text-error mt-1">{stats.failed}</p>
+            </div>
+            <div className="dashboard-card p-5 border-warning/30 bg-warning-50">
+              <p className="text-xs font-medium text-warning uppercase tracking-wide">≈ Duplicates</p>
+              <p className="text-3xl font-bold text-warning mt-1">{stats.duplicate}</p>
             </div>
           </div>
-        )}
 
-        {isCompleted && stats && (
-          <>
-            <div className="flex items-center gap-3 text-[#10B981] bg-[#ECFDF5] border border-[#10B981] p-4 rounded-lg">
-              <CheckCircle2 size={24} />
-              <span className="font-semibold">Processing Complete</span>
-            </div>
+          <button
+            onClick={() => setPhase(3)}
+            className="btn-primary flex items-center justify-center gap-2"
+          >
+            Continue to Ranking →
+          </button>
+        </div>
+      )}
 
-            <div className="bg-white border border-[#E5E5E5] rounded-lg p-6 shadow-card">
-              <h3 className="font-semibold text-[#262626] mb-6 text-lg">Processing Summary</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-[#F5F5F5] rounded-lg p-4">
-                  <p className="text-sm text-[#737373] mb-1">Total Files</p>
-                  <p className="text-2xl font-bold text-[#262626]">{stats.total_files}</p>
-                </div>
-                <div className="bg-[#ECFDF5] rounded-lg p-4 border border-[#10B981]">
-                  <p className="text-sm text-[#10B981] mb-1">✓ Successfully Processed</p>
-                  <p className="text-2xl font-bold text-[#10B981]">{stats.ok}</p>
-                </div>
-                <div className="bg-[#FEE2E2] rounded-lg p-4 border border-[#EF4444]">
-                  <p className="text-sm text-[#EF4444] mb-1">✗ Failed</p>
-                  <p className="text-2xl font-bold text-[#EF4444]">{stats.failed}</p>
-                </div>
-                <div className="bg-[#FEF3C7] rounded-lg p-4 border border-[#F59E0B]">
-                  <p className="text-sm text-[#F59E0B] mb-1">≈ Duplicates</p>
-                  <p className="text-2xl font-bold text-[#F59E0B]">{stats.duplicate}</p>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setPhase(3)}
-              className="w-full gradient-primary text-white py-4 rounded-lg font-semibold hover:opacity-90 transition-all shadow-card hover:shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2"
-            >
-              Continue to Ranking
-              <span>→</span>
-            </button>
-          </>
-        )}
-
-        {error && (
-          <div className="bg-[#FEE2E2] border border-[#EF4444] rounded-lg p-4 flex gap-3">
-            <AlertCircle size={20} className="text-[#EF4444] flex-shrink-0" />
-            <p className="text-sm text-[#DC2626]">{error}</p>
-          </div>
-        )}
-      </div>
+      {error && (
+        <div className="mt-6 bg-error-50 border border-error-100 rounded-lg p-4 flex gap-3">
+          <AlertCircle size={20} className="text-error shrink-0" />
+          <p className="text-sm text-error font-medium">{error}</p>
+        </div>
+      )}
     </div>
   )
 }

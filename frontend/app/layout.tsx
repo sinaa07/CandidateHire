@@ -1,15 +1,14 @@
 import type React from "react"
 import type { Metadata } from "next"
 import { Inter, JetBrains_Mono } from "next/font/google"
-import { AppProvider } from "@/contexts/AppContext"
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
 export const metadata: Metadata = {
-  title: "CandidateHire - Resume Screening Platform",
-  description: "Professional resume screening and ranking application",
+  title: "CandidateHire — HR Screening Dashboard",
+  description: "Job-based resume screening, ranking, and candidate pipeline",
   generator: "v0.app",
   icons: {
     icon: [
@@ -38,7 +37,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
-        <AppProvider>{children}</AppProvider>
+        {children}
       </body>
     </html>
   )

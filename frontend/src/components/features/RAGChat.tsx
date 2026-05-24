@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback, memo } from "react"
 import { Send, Bot, User, Sparkles, X, Minimize2, Maximize2 } from "lucide-react"
 import { useAppContext } from "@/contexts/AppContext"
 import { queryRAG } from "@/utils/api"
 
 interface Message {
-  role: "user" | "assistant" | "system"
+  id: string
+  role: "user" | "assistant"
   content: string
   timestamp: Date
 }
@@ -20,346 +21,430 @@ const SUGGESTIONS = [
   "Who has startup experience?",
 ]
 
+function newMessageId() {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+/* Stable child components — must live outside RAGChat so typing does not remount the input */
+
+const ChatInput = memo(function ChatInput({
+  value,
+  onChange,
+  onSend,
+  disabled,
+  compact,
+}: {
+  value: string
+  onChange: (value: string) => void
+  onSend: () => void
+  disabled: boolean
+  compact?: boolean
+}) {
+  return (
+    <div className="border-t border-border bg-card p-4 shrink-0">
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          onSend()
+        }}
+      >
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Type your question..."
+          className={`flex-1 border border-border rounded-lg bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring ${
+            compact ? "px-3 py-2 text-sm" : "px-4 py-2"
+          }`}
+          disabled={disabled}
+          autoComplete="off"
+        />
+        <button
+          type="submit"
+          disabled={!value.trim() || disabled}
+          className={`gradient-primary text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center ${
+            compact ? "px-4 py-2" : "px-6 py-2"
+          }`}
+        >
+          <Send size={compact ? 16 : 18} />
+        </button>
+      </form>
+    </div>
+  )
+})
+
+const EmptyState = memo(function EmptyState({
+  compact,
+  onSuggestion,
+}: {
+  compact?: boolean
+  onSuggestion: (text: string) => void
+}) {
+  return (
+    <div className={`text-center ${compact ? "py-8" : "py-12"}`}>
+      <Sparkles className={`mx-auto text-primary mb-3 ${compact ? "w-8 h-8" : "w-12 h-12"}`} />
+      <h3 className={`font-semibold text-foreground ${compact ? "text-sm" : "text-lg"}`}>AI Assistant</h3>
+      <p className="text-muted-foreground text-sm mt-1 mb-4">Ask questions about your candidates</p>
+      <div className={`grid gap-2 ${compact ? "grid-cols-1" : "grid-cols-2 max-w-2xl mx-auto"}`}>
+        {SUGGESTIONS.map((suggestion) => (
+          <button
+            key={suggestion}
+            type="button"
+            onClick={() => onSuggestion(suggestion)}
+            className="text-left p-3 bg-muted hover:bg-muted/80 rounded-lg text-sm text-foreground transition-colors border border-border"
+          >
+            {suggestion}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+})
+
+const MessageBubble = memo(function MessageBubble({
+  message,
+  compact,
+}: {
+  message: Message
+  compact?: boolean
+}) {
+  const isUser = message.role === "user"
+
+  return (
+    <div className={`flex gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
+      {!isUser && (
+        <div className={`rounded-full bg-primary flex items-center justify-center shrink-0 ${compact ? "w-6 h-6" : "w-8 h-8"}`}>
+          <Bot size={compact ? 12 : 16} className="text-white" />
+        </div>
+      )}
+      <div
+        className={`rounded-lg shadow-card ${
+          compact ? "max-w-[85%] p-3 text-xs" : "max-w-[70%] p-4 text-sm"
+        } ${isUser ? "bg-primary text-white" : "bg-card text-foreground border border-border"}`}
+      >
+        <p className="whitespace-pre-wrap break-words">
+          {message.content}
+          {!isUser && message.content === "" && (
+            <span className="inline-block w-0.5 h-4 bg-primary/60 animate-pulse align-middle ml-0.5" aria-hidden />
+          )}
+        </p>
+        {!compact && (
+          <p className="text-xs mt-2 opacity-70">
+            {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </p>
+        )}
+      </div>
+      {isUser && (
+        <div className={`rounded-full bg-muted flex items-center justify-center shrink-0 ${compact ? "w-6 h-6" : "w-8 h-8"}`}>
+          <User size={compact ? 12 : 16} className="text-muted-foreground" />
+        </div>
+      )}
+    </div>
+  )
+})
+
+const TypingIndicator = memo(function TypingIndicator({ compact }: { compact?: boolean }) {
+  return (
+    <div className="flex gap-2 justify-start">
+      <div className={`rounded-full bg-primary flex items-center justify-center ${compact ? "w-6 h-6" : "w-8 h-8"}`}>
+        <Bot size={compact ? 12 : 16} className="text-white" />
+      </div>
+      <div className="bg-card border border-border shadow-card rounded-lg p-3">
+        <div className="flex gap-1">
+          {[0, 150, 300].map((delay) => (
+            <span
+              key={delay}
+              className="w-2 h-2 bg-primary rounded-full animate-bounce"
+              style={{ animationDelay: `${delay}ms` }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+})
+
+const MessageList = memo(function MessageList({
+  messages,
+  showTyping,
+  compact,
+  onSuggestion,
+  messagesEndRef,
+  scrollContainerRef,
+}: {
+  messages: Message[]
+  showTyping: boolean
+  compact?: boolean
+  onSuggestion: (text: string) => void
+  messagesEndRef: React.RefObject<HTMLDivElement | null>
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>
+}) {
+  return (
+    <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+      {messages.length === 0 && <EmptyState compact={compact} onSuggestion={onSuggestion} />}
+      {messages.map((msg) => (
+        <MessageBubble key={msg.id} message={msg} compact={compact} />
+      ))}
+      {showTyping && <TypingIndicator compact={compact} />}
+      <div ref={messagesEndRef} />
+    </div>
+  )
+})
+
+const ChatHeader = memo(function ChatHeader({
+  title,
+  expanded,
+  onExpand,
+  onMinimize,
+}: {
+  title: string
+  expanded?: boolean
+  onExpand?: () => void
+  onMinimize: () => void
+}) {
+  return (
+    <div className={`border-b border-border flex items-center justify-between bg-card shrink-0 ${expanded ? "px-6 py-4" : "px-4 py-3"}`}>
+      <div className="flex items-center gap-2">
+        <Bot className="text-primary" size={expanded ? 24 : 20} />
+        <h2 className={`font-semibold text-foreground ${expanded ? "text-xl" : "text-base"}`}>{title}</h2>
+      </div>
+      <div className="flex gap-1">
+        {onExpand && (
+          <button type="button" onClick={onExpand} className="p-1.5 hover:bg-muted rounded transition-colors">
+            <Maximize2 size={expanded ? 20 : 16} />
+          </button>
+        )}
+        <button type="button" onClick={onMinimize} className="p-1.5 hover:bg-muted rounded transition-colors">
+          <X size={expanded ? 20 : 16} />
+        </button>
+      </div>
+    </div>
+  )
+})
+
 export function RAGChat() {
   const { currentCollection } = useAppContext()
   const { collection_id, company_id } = currentCollection
+
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isStreaming, setIsStreaming] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
+  const streamingMessageIdRef = useRef<string | null>(null)
+  const streamBufferRef = useRef("")
+  const rafRef = useRef<number | null>(null)
+  const receivedChunkRef = useRef(false)
+  const streamDoneRef = useRef(false)
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
+  const flushStreamBuffer = useCallback(() => {
+    const id = streamingMessageIdRef.current
+    const chunk = streamBufferRef.current
+    if (!id || !chunk) return
 
+    streamBufferRef.current = ""
+    setMessages((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, content: m.content + chunk } : m)),
+    )
+  }, [])
+
+  const scheduleStreamFlush = useCallback(() => {
+    if (rafRef.current !== null) return
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null
+      flushStreamBuffer()
+    })
+  }, [flushStreamBuffer])
+
+  const appendStreamChunk = useCallback(
+    (chunk: string) => {
+      streamBufferRef.current += chunk
+      scheduleStreamFlush()
+    },
+    [scheduleStreamFlush],
+  )
+
+  const finishStreaming = useCallback(() => {
+    if (streamDoneRef.current) return
+    streamDoneRef.current = true
+
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+    flushStreamBuffer()
+    streamingMessageIdRef.current = null
+    setIsStreaming(false)
+    setIsSubmitting(false)
+    eventSourceRef.current?.close()
+    eventSourceRef.current = null
+  }, [flushStreamBuffer])
+
+  const scrollToBottom = useCallback((smooth: boolean) => {
+    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "end" })
+  }, [])
+
+  const showTyping = isSubmitting && !isStreaming
+
+  // Auto-scroll when messages grow or stream updates (not when user types in the input)
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+    scrollToBottom(isStreaming)
+  }, [messages, isStreaming, showTyping, scrollToBottom])
 
   useEffect(() => {
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-      }
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
+      eventSourceRef.current?.close()
     }
   }, [])
 
-  const handleSend = async () => {
-    if (!input.trim() || !collection_id || !company_id || isLoading) return
+  const handleSend = useCallback(async () => {
+    const text = input.trim()
+    if (!text || !collection_id || !company_id || isSubmitting) return
 
     const userMessage: Message = {
+      id: newMessageId(),
       role: "user",
-      content: input.trim(),
+      content: text,
       timestamp: new Date(),
     }
-    setMessages((prev) => [...prev, userMessage])
+
+    const assistantId = newMessageId()
+    const assistantPlaceholder: Message = {
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      timestamp: new Date(),
+    }
+
     setInput("")
-    setIsLoading(true)
+    setMessages((prev) => [...prev, userMessage, assistantPlaceholder])
+    setIsSubmitting(true)
+    setIsStreaming(false)
+    streamingMessageIdRef.current = assistantId
+    streamBufferRef.current = ""
+    receivedChunkRef.current = false
+    streamDoneRef.current = false
 
     try {
-      // Submit query
       const response = await queryRAG(collection_id, {
-        company_id: company_id,
-        query: input.trim(),
+        company_id,
+        query: text,
         top_k: 5,
         include_context: true,
       })
 
-      const { task_id } = response
-
-      // Stream response via SSE
-      const eventSource = new EventSource(`${API_BASE_URL}/rag/stream/${task_id}`)
+      const eventSource = new EventSource(`${API_BASE_URL}/rag/stream/${response.task_id}`)
       eventSourceRef.current = eventSource
-
-      let assistantMessage: Message = {
-        role: "assistant",
-        content: "",
-        timestamp: new Date(),
-      }
-
-      setMessages((prev) => [...prev, assistantMessage])
 
       eventSource.onmessage = (e) => {
         const chunk = e.data
-        if (chunk && !chunk.startsWith("Error:")) {
-          setMessages((prev) => {
-            const updated = [...prev]
-            updated[updated.length - 1] = {
-              ...updated[updated.length - 1],
-              content: updated[updated.length - 1].content + chunk,
-            }
-            return updated
-          })
-        } else if (chunk.startsWith("Error:")) {
-          setMessages((prev) => {
-            const updated = [...prev]
-            updated[updated.length - 1] = {
-              ...updated[updated.length - 1],
-              content: chunk,
-            }
-            return updated
-          })
-          setIsLoading(false)
-          eventSource.close()
+        if (!chunk) return
+
+        if (chunk.startsWith("Error:")) {
+          if (rafRef.current !== null) {
+            cancelAnimationFrame(rafRef.current)
+            rafRef.current = null
+          }
+          streamBufferRef.current = ""
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantId ? { ...m, content: chunk } : m)),
+          )
+          finishStreaming()
+          return
         }
+
+        if (!receivedChunkRef.current) {
+          receivedChunkRef.current = true
+          setIsStreaming(true)
+        }
+        appendStreamChunk(chunk)
       }
 
       eventSource.onerror = () => {
-        setIsLoading(false)
-        eventSource.close()
+        // EventSource fires onerror when the stream ends (including normal close)
+        finishStreaming()
       }
     } catch (error) {
-      const errorMessage: Message = {
-        role: "assistant",
-        content: `Error: ${error instanceof Error ? error.message : "Failed to process query"}`,
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, errorMessage])
-    } finally {
-      setIsLoading(false)
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? {
+                ...m,
+                content: `Error: ${error instanceof Error ? error.message : "Failed to process query"}`,
+              }
+            : m,
+        ),
+      )
+      finishStreaming()
     }
-  }
+  }, [input, collection_id, company_id, isSubmitting, appendStreamChunk, finishStreaming])
 
-  const handleSuggestion = (suggestion: string) => {
+  const handleSuggestion = useCallback((suggestion: string) => {
     setInput(suggestion)
-  }
+  }, [])
+
+  const inputDisabled = isSubmitting || !collection_id
 
   if (isMinimized) {
     return (
       <button
+        type="button"
         onClick={() => setIsMinimized(false)}
-        className="fixed bottom-4 right-4 w-14 h-14 bg-[#6366F1] text-white rounded-full shadow-lg hover:bg-[#4F46E5] transition-all flex items-center justify-center z-50"
+        className="fixed bottom-4 right-4 w-14 h-14 gradient-primary text-white rounded-full shadow-lg hover:opacity-90 flex items-center justify-center z-50"
+        aria-label="Open AI assistant"
       >
         <Bot size={24} />
       </button>
     )
   }
 
+  const listProps = {
+    messages,
+    showTyping,
+    onSuggestion: handleSuggestion,
+    messagesEndRef,
+    scrollContainerRef,
+  }
+
   if (isExpanded) {
     return (
-      <div className="fixed inset-0 bg-white z-50 flex flex-col">
-        <div className="border-b border-[#E5E5E5] px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Bot className="text-[#6366F1]" size={24} />
-            <h2 className="text-xl font-semibold text-[#262626]">AI-Powered Search</h2>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setIsExpanded(false)}
-              className="p-2 hover:bg-[#F5F5F5] rounded-md transition-colors"
-            >
-              <Minimize2 size={20} />
-            </button>
-            <button
-              onClick={() => setIsMinimized(true)}
-              className="p-2 hover:bg-[#F5F5F5] rounded-md transition-colors"
-            >
-              <X size={20} />
-            </button>
-          </div>
-        </div>
-        <div className="flex-1 overflow-hidden flex">
-          <div className="flex-1 flex flex-col">
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {messages.length === 0 && (
-                <div className="text-center py-12">
-                  <Sparkles className="mx-auto text-[#6366F1] mb-4" size={48} />
-                  <h3 className="text-xl font-semibold text-[#262626] mb-2">AI Assistant</h3>
-                  <p className="text-[#737373] mb-6">Ask questions about your candidates</p>
-                  <div className="grid grid-cols-2 gap-3 max-w-2xl mx-auto">
-                    {SUGGESTIONS.map((suggestion, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleSuggestion(suggestion)}
-                        className="text-left p-3 bg-[#F5F5F5] hover:bg-[#E5E5E5] rounded-lg text-sm text-[#262626] transition-colors"
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {messages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  {msg.role === "assistant" && (
-                    <div className="w-8 h-8 rounded-full bg-[#6366F1] flex items-center justify-center flex-shrink-0">
-                      <Bot size={16} className="text-white" />
-                    </div>
-                  )}
-                  <div
-                    className={`max-w-[70%] rounded-lg p-4 ${
-                      msg.role === "user"
-                        ? "bg-[#6366F1] text-white"
-                        : "bg-white shadow-card text-[#262626]"
-                    }`}
-                  >
-                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                    <p className="text-xs mt-2 opacity-70">
-                      {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </p>
-                  </div>
-                  {msg.role === "user" && (
-                    <div className="w-8 h-8 rounded-full bg-[#E5E5E5] flex items-center justify-center flex-shrink-0">
-                      <User size={16} className="text-[#737373]" />
-                    </div>
-                  )}
-                </div>
-              ))}
-              {isLoading && (
-                <div className="flex gap-3 justify-start">
-                  <div className="w-8 h-8 rounded-full bg-[#6366F1] flex items-center justify-center">
-                    <Bot size={16} className="text-white" />
-                  </div>
-                  <div className="bg-white shadow-card rounded-lg p-4">
-                    <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-[#6366F1] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                      <span className="w-2 h-2 bg-[#6366F1] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                      <span className="w-2 h-2 bg-[#6366F1] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-            <div className="border-t border-[#E5E5E5] p-4">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-                  placeholder="Type your question..."
-                  className="flex-1 px-4 py-2 border border-[#E5E5E5] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6366F1] focus:border-transparent"
-                  disabled={isLoading || !collection_id}
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={!input.trim() || isLoading || !collection_id}
-                  className="px-6 py-2 bg-[#6366F1] text-white rounded-lg hover:bg-[#4F46E5] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                >
-                  <Send size={18} />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="fixed inset-0 bg-background z-50 flex flex-col">
+        <ChatHeader title="AI-Powered Search" expanded onMinimize={() => setIsMinimized(true)} />
+        <MessageList {...listProps} />
+        <ChatInput
+          value={input}
+          onChange={setInput}
+          onSend={handleSend}
+          disabled={inputDisabled}
+        />
       </div>
     )
   }
 
   return (
-    <div className="w-[420px] border-l border-[#E5E5E5] bg-white flex flex-col h-full">
-      <div className="border-b border-[#E5E5E5] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Bot className="text-[#6366F1]" size={20} />
-          <h3 className="font-semibold text-[#262626]">AI Assistant</h3>
-        </div>
-        <div className="flex gap-1">
-          <button
-            onClick={() => setIsExpanded(true)}
-            className="p-1.5 hover:bg-[#F5F5F5] rounded transition-colors"
-          >
-            <Maximize2 size={16} />
-          </button>
-          <button
-            onClick={() => setIsMinimized(true)}
-            className="p-1.5 hover:bg-[#F5F5F5] rounded transition-colors"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && (
-          <div className="text-center py-8">
-            <Sparkles className="mx-auto text-[#6366F1] mb-3" size={32} />
-            <p className="text-sm text-[#737373] mb-4">Ask questions about your candidates</p>
-            <div className="space-y-2">
-              {SUGGESTIONS.map((suggestion, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSuggestion(suggestion)}
-                  className="w-full text-left p-2 bg-[#F5F5F5] hover:bg-[#E5E5E5] rounded-lg text-xs text-[#262626] transition-colors"
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {messages.map((msg, idx) => (
-          <div
-            key={idx}
-            className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-          >
-            {msg.role === "assistant" && (
-              <div className="w-6 h-6 rounded-full bg-[#6366F1] flex items-center justify-center flex-shrink-0">
-                <Bot size={12} className="text-white" />
-              </div>
-            )}
-            <div
-              className={`max-w-[80%] rounded-lg p-3 text-xs ${
-                msg.role === "user"
-                  ? "bg-[#6366F1] text-white"
-                  : "bg-white shadow-card text-[#262626]"
-              }`}
-            >
-              <p className="whitespace-pre-wrap">{msg.content}</p>
-            </div>
-            {msg.role === "user" && (
-              <div className="w-6 h-6 rounded-full bg-[#E5E5E5] flex items-center justify-center flex-shrink-0">
-                <User size={12} className="text-[#737373]" />
-              </div>
-            )}
-          </div>
-        ))}
-
-        {isLoading && (
-          <div className="flex gap-2 justify-start">
-            <div className="w-6 h-6 rounded-full bg-[#6366F1] flex items-center justify-center">
-              <Bot size={12} className="text-white" />
-            </div>
-            <div className="bg-white shadow-card rounded-lg p-3">
-              <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 bg-[#6366F1] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-1.5 h-1.5 bg-[#6366F1] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-1.5 h-1.5 bg-[#6366F1] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
-      </div>
-
-      <div className="border-t border-[#E5E5E5] p-4">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-            placeholder="Type your question..."
-            className="flex-1 px-3 py-2 text-sm border border-[#E5E5E5] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6366F1] focus:border-transparent"
-            disabled={isLoading || !collection_id}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isLoading || !collection_id}
-            className="px-4 py-2 bg-[#6366F1] text-white rounded-lg hover:bg-[#4F46E5] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
-          >
-            <Send size={16} />
-          </button>
-        </div>
-      </div>
-    </div>
+    <aside className="w-[420px] shrink-0 border-l border-border bg-card flex flex-col h-full hidden lg:flex">
+      <ChatHeader
+        title="AI Assistant"
+        onExpand={() => setIsExpanded(true)}
+        onMinimize={() => setIsMinimized(true)}
+      />
+      <MessageList {...listProps} compact />
+      <ChatInput
+        value={input}
+        onChange={setInput}
+        onSend={handleSend}
+        disabled={inputDisabled}
+        compact
+      />
+    </aside>
   )
 }
