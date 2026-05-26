@@ -8,9 +8,12 @@ import type {
   PipelineStatus,
   RankingsResponse,
   RankingConfig,
+  RankingMode,
   RerankResult,
   ResumeListItem,
   RankSummary,
+  SkillMapResponse,
+  SkillMapStatusResponse,
   UploadResumesResponse,
 } from "@/types/v2"
 
@@ -90,6 +93,7 @@ export async function updateJob(
     status: string
     jd_text: string
     ranking_config: RankingConfig
+    ranking_mode: RankingMode
   }>
 ): Promise<JobRead> {
   const res = await fetch(v2(`/api/v2/companies/${companyId}/jobs/${jobId}`), {
@@ -140,15 +144,53 @@ export async function getPipelineStatus(companyId: string, jobId: string): Promi
   return handleApiResponse<PipelineStatus>(res)
 }
 
+export async function getSkillMapStatus(
+  companyId: string,
+  jobId: string
+): Promise<SkillMapStatusResponse> {
+  const res = await fetch(
+    v2(`/api/v2/companies/${companyId}/jobs/${jobId}/pipeline/skill-map/status`),
+    { headers: authHeaders() }
+  )
+  return handleApiResponse<SkillMapStatusResponse>(res)
+}
+
+export async function getSkillMap(
+  companyId: string,
+  jobId: string
+): Promise<SkillMapResponse> {
+  const res = await fetch(
+    v2(`/api/v2/companies/${companyId}/jobs/${jobId}/pipeline/skill-map`),
+    { headers: authHeaders() }
+  )
+  return handleApiResponse<SkillMapResponse>(res)
+}
+
+export async function rebuildSkillMap(
+  companyId: string,
+  jobId: string
+): Promise<{ message: string; job_id: string }> {
+  const res = await fetch(
+    v2(`/api/v2/companies/${companyId}/jobs/${jobId}/pipeline/skill-map/rebuild`),
+    { method: "POST", headers: authHeaders() }
+  )
+  return handleApiResponse(res)
+}
+
 export async function triggerRank(
   companyId: string,
   jobId: string,
-  configOverride?: Partial<RankingConfig>
+  configOverride?: Partial<RankingConfig>,
+  rankingMode?: RankingMode
 ): Promise<RankSummary> {
+  const body: Record<string, unknown> = {}
+  if (configOverride) body.config_override = configOverride
+  if (rankingMode) body.ranking_mode = rankingMode
+
   const res = await fetch(v2(`/api/v2/companies/${companyId}/jobs/${jobId}/pipeline/rank`), {
     method: "POST",
     headers: mergeHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(configOverride ? { config_override: configOverride } : {}),
+    body: JSON.stringify(body),
   })
   return handleApiResponse<RankSummary>(res)
 }
@@ -156,13 +198,20 @@ export async function triggerRank(
 export async function getRankings(
   companyId: string,
   jobId: string,
-  params?: { limit?: number; offset?: number; min_score?: number; passed_only?: boolean }
+  params?: {
+    limit?: number
+    offset?: number
+    min_score?: number
+    passed_only?: boolean
+    mode_filter?: RankingMode
+  }
 ): Promise<RankingsResponse> {
   const search = new URLSearchParams()
   if (params?.limit != null) search.set("limit", String(params.limit))
   if (params?.offset != null) search.set("offset", String(params.offset))
   if (params?.min_score != null) search.set("min_score", String(params.min_score))
   if (params?.passed_only) search.set("passed_only", "true")
+  if (params?.mode_filter) search.set("mode_filter", params.mode_filter)
   const qs = search.toString()
   const res = await fetch(
     v2(`/api/v2/companies/${companyId}/jobs/${jobId}/pipeline/rankings${qs ? `?${qs}` : ""}`),

@@ -51,6 +51,7 @@ def create_job_storage_dirs(company_id: uuid.UUID, job_id: uuid.UUID) -> None:
         "embeddings",
         "rankings",
         "rag",
+        "skill_maps",
     ):
         (root / sub).mkdir(parents=True, exist_ok=True)
 
@@ -128,6 +129,9 @@ def job_to_read(db: Session, job: Job) -> JobRead:
         top_score=s.top_score,
         pipeline_stage=s.pipeline_stage,
         last_ranked_at=s.last_ranked_at,
+        ranking_mode=job.ranking_mode,
+        skill_map_status=job.skill_map_status,
+        skill_map_built_at=job.skill_map_built_at,
     )
 
 
@@ -146,6 +150,8 @@ def job_to_summary(db: Session, job: Job) -> JobSummary:
         top_score=s.top_score,
         pipeline_stage=s.pipeline_stage,
         last_ranked_at=s.last_ranked_at,
+        ranking_mode=job.ranking_mode,
+        skill_map_status=job.skill_map_status,
     )
 
 
@@ -174,6 +180,9 @@ def jobs_to_read_list(db: Session, jobs: list[Job]) -> list[JobRead]:
                 top_score=s.top_score,
                 pipeline_stage=s.pipeline_stage,
                 last_ranked_at=s.last_ranked_at,
+                ranking_mode=job.ranking_mode,
+                skill_map_status=job.skill_map_status,
+                skill_map_built_at=job.skill_map_built_at,
             )
         )
     return result
@@ -197,6 +206,8 @@ def jobs_to_summary_list(db: Session, jobs: list[Job]) -> list[JobSummary]:
             top_score=stats_map.get(job.id, JobStats()).top_score,
             pipeline_stage=stats_map.get(job.id, JobStats()).pipeline_stage,
             last_ranked_at=stats_map.get(job.id, JobStats()).last_ranked_at,
+            ranking_mode=job.ranking_mode,
+            skill_map_status=job.skill_map_status,
         )
         for job in jobs
     ]

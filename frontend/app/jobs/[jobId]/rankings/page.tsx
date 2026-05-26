@@ -7,6 +7,7 @@ import { format } from "date-fns"
 import { ChevronDown, ChevronRight, Download } from "lucide-react"
 import { V2Nav } from "@/components/v2/V2Nav"
 import { StatusBadge } from "@/components/v2/StatusBadge"
+import { RankingModeToggle } from "@/components/features/RankingModeToggle"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import {
@@ -26,19 +27,21 @@ import {
   exportCSV,
   getJob,
   getRankings,
+  getSkillMapStatus,
   rerank,
   saveRankingConfig,
+  triggerRank,
+  updateJob,
 } from "@/utils/api.v2"
 import { getCompanyId } from "@/utils/companyId"
-import type { JobRead, RankingListItem, RankingConfig } from "@/types/v2"
-
-const EDUCATION_LABELS: Record<number, string> = {
-  0: "None",
-  1: "Diploma / Certificate",
-  2: "Bachelor's",
-  3: "Master's",
-  4: "PhD / Doctorate",
-}
+import type {
+  JobRead,
+  LikelyCoveredSkill,
+  RankingListItem,
+  RankingConfig,
+  RankingMode,
+  SkillMapStatusValue,
+} from "@/types/v2"
 
 const DEFAULT_WEIGHTS = {
   semantic: 0.45,
@@ -62,6 +65,94 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
   )
 }
 
+function SkillPills({
+  skills,
+  className,
+}: {
+  skills: string[]
+  className: string
+}) {
+  if (!skills.length) {
+    return <span className="text-xs text-muted-foreground">None</span>
+  }
+  return (
+    <>
+      {skills.map((s) => (
+        <span key={s} className={`rounded-full px-2 py-0.5 text-xs ${className}`}>
+          {s}
+        </span>
+      ))}
+    </>
+  )
+}
+
+function LikelyCoveredPills({ items }: { items: LikelyCoveredSkill[] }) {
+  if (!items.length) {
+    return <span className="text-xs text-muted-foreground">None</span>
+  }
+  return (
+    <>
+      {items.map((item) => (
+        <span
+          key={item.skill}
+          title={`covered by: ${item.covered_by.join(", ")}`}
+          className="cursor-help rounded-full bg-[#EFF6FF] px-2 py-0.5 text-xs text-[#3B82F6]"
+        >
+          {item.skill}
+        </span>
+      ))}
+    </>
+  )
+}
+
+function CandidateSkillsPanel({
+  item,
+  isContextual,
+}: {
+  item: RankingListItem
+  isContextual: boolean
+}) {
+  if (!isContextual) {
+    return (
+      <div>
+        <h4 className="mb-2 text-sm font-semibold">Missing skills</h4>
+        <div className="flex flex-wrap gap-1">
+          <SkillPills
+            skills={item.missing_skills}
+            className="bg-[#fef2f2] text-[#EF4444]/80"
+          />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h4 className="mb-2 text-sm font-semibold">Matched skills</h4>
+        <div className="flex flex-wrap gap-1">
+          <SkillPills skills={item.matched_skills} className="bg-[#ecfdf5] text-[#10B981]" />
+        </div>
+      </div>
+      <div>
+        <h4 className="mb-2 text-sm font-semibold">Implied / covered</h4>
+        <div className="flex flex-wrap gap-1">
+          <LikelyCoveredPills items={item.likely_covered_skills ?? []} />
+        </div>
+      </div>
+      <div>
+        <h4 className="mb-2 text-sm font-semibold">Genuinely missing skills</h4>
+        <div className="flex flex-wrap gap-1">
+          <SkillPills
+            skills={item.truly_missing_skills ?? []}
+            className="bg-[#fef2f2] text-[#EF4444]/80"
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function RankingsPage() {
   const params = useParams()
   const jobId = params.jobId as string
@@ -69,10 +160,13 @@ export default function RankingsPage() {
 
   const [job, setJob] = useState<JobRead | null>(null)
   const [items, setItems] = useState<RankingListItem[]>([])
+  const [rankingMode, setRankingMode] = useState<RankingMode>("keyword")
+  const [skillMapStatus, setSkillMapStatus] = useState<SkillMapStatusValue>("pending")
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [weightsOpen, setWeightsOpen] = useState(true)
   const [weights, setWeights] = useState(DEFAULT_WEIGHTS)
   const [loading, setLoading] = useState(true)
+  const [tableLoading, setTableLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reranking, setReranking] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -88,12 +182,19 @@ export default function RankingsPage() {
     setLoading(true)
     setError(null)
     try {
-      const [jobData, rankings] = await Promise.all([
+      const [jobData, rankings, mapStatus] = await Promise.all([
         getJob(companyId, jobId),
         getRankings(companyId, jobId, { limit: 50 }),
+        getSkillMapStatus(companyId, jobId).catch(() => null),
       ])
       setJob(jobData)
       setItems(rankings.items)
+      setRankingMode((jobData.ranking_mode as RankingMode) || "keyword")
+      setSkillMapStatus(
+        (mapStatus?.status as SkillMapStatusValue) ||
+          (jobData.skill_map_status as SkillMapStatusValue) ||
+          "pending"
+      )
       if (jobData.ranking_config?.weights) {
         setWeights({ ...DEFAULT_WEIGHTS, ...jobData.ranking_config.weights })
       }
@@ -117,6 +218,21 @@ export default function RankingsPage() {
   }, [items])
 
   const rankedAt = items[0]?.ranked_at
+  const isContextualMode = rankingMode === "contextual"
+
+  const contextualSummary = useMemo(() => {
+    if (!isContextualMode) return null
+    let inferredCount = 0
+    let candidateCount = 0
+    for (const item of items) {
+      const covered = item.likely_covered_skills ?? []
+      if (covered.length > 0) {
+        candidateCount += 1
+        inferredCount += covered.length
+      }
+    }
+    return { inferredCount, candidateCount }
+  }, [items, isContextualMode])
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -127,14 +243,43 @@ export default function RankingsPage() {
     })
   }
 
+  const refreshRankings = useCallback(
+    async (mode: RankingMode) => {
+      if (!companyId) return
+      const rankings = await getRankings(companyId, jobId, {
+        limit: 50,
+        mode_filter: mode,
+      })
+      setItems(rankings.items)
+    },
+    [companyId, jobId]
+  )
+
+  const handleModeChange = async (mode: RankingMode) => {
+    if (!companyId || mode === rankingMode) return
+    setTableLoading(true)
+    setError(null)
+    try {
+      await updateJob(companyId, jobId, { ranking_mode: mode })
+      await triggerRank(companyId, jobId, undefined, mode)
+      await refreshRankings(mode)
+      setRankingMode(mode)
+      setJob((j) => (j ? { ...j, ranking_mode: mode } : j))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to switch ranking mode")
+    } finally {
+      setTableLoading(false)
+    }
+  }
+
   const handleRerank = async () => {
     if (!companyId || !weightsValid) return
     setReranking(true)
     try {
       const results = await rerank(companyId, jobId, weights)
       const byId = new Map(results.map((r) => [r.candidate_id, r]))
-      setItems((prev) => {
-        const updated = prev.map((item) => {
+      setItems((prev) =>
+        prev.map((item) => {
           const r = byId.get(item.candidate_id)
           if (!r) return item
           return {
@@ -144,10 +289,12 @@ export default function RankingsPage() {
             score_breakdown: r.score_breakdown,
             matched_skills: r.matched_skills,
             missing_skills: r.missing_skills,
+            truly_missing_skills: r.truly_missing_skills,
+            likely_covered_skills: r.likely_covered_skills,
+            ranking_mode_used: r.ranking_mode_used,
           }
         })
-        return updated
-      })
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : "Rerank failed")
     } finally {
@@ -223,6 +370,17 @@ export default function RankingsPage() {
           </div>
         )}
 
+        {companyId && (
+          <RankingModeToggle
+            jobId={jobId}
+            companyId={companyId}
+            currentMode={rankingMode}
+            skillMapStatus={skillMapStatus}
+            onModeChange={handleModeChange}
+            onSkillMapStatusChange={setSkillMapStatus}
+          />
+        )}
+
         <Collapsible open={weightsOpen} onOpenChange={setWeightsOpen} className="mb-6">
           <div className="rounded-xl border border-border bg-card shadow-sm">
             <CollapsibleTrigger className="flex w-full items-center justify-between p-4 text-left font-semibold">
@@ -272,9 +430,26 @@ export default function RankingsPage() {
           </div>
         </Collapsible>
 
-        {loading && <p className="text-muted-foreground">Loading rankings...</p>}
+        {isContextualMode && contextualSummary && items.length > 0 && (
+          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Contextual mode: {contextualSummary.inferredCount} skill
+            {contextualSummary.inferredCount !== 1 ? "s" : ""} inferred across{" "}
+            {contextualSummary.candidateCount} candidate
+            {contextualSummary.candidateCount !== 1 ? "s" : ""}
+          </p>
+        )}
 
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        {(loading || tableLoading) && (
+          <p className="mb-4 text-muted-foreground">
+            {tableLoading ? "Updating rankings..." : "Loading rankings..."}
+          </p>
+        )}
+
+        <div
+          className={`overflow-hidden rounded-xl border border-border bg-card shadow-sm ${
+            tableLoading ? "pointer-events-none opacity-60" : ""
+          }`}
+        >
           <Table>
             <TableHeader>
               <TableRow>
@@ -293,6 +468,8 @@ export default function RankingsPage() {
               {sortedItems.map((item) => {
                 const isExpanded = expanded.has(item.candidate_id)
                 const failed = !item.passed_hard_filter
+                const rowContextual =
+                  (item.ranking_mode_used as RankingMode) === "contextual" || isContextualMode
                 return (
                   <Fragment key={item.candidate_id}>
                     <TableRow
@@ -337,38 +514,7 @@ export default function RankingsPage() {
                               <ScoreBar label="Experience" value={item.score_breakdown.experience ?? 0} />
                               <ScoreBar label="Education" value={item.score_breakdown.education ?? 0} />
                             </div>
-                            <div>
-                              <h4 className="mb-2 text-sm font-semibold">Matched skills</h4>
-                              <div className="mb-4 flex flex-wrap gap-1">
-                                {item.matched_skills.length ? (
-                                  item.matched_skills.map((s) => (
-                                    <span
-                                      key={s}
-                                      className="rounded-full bg-[#ecfdf5] px-2 py-0.5 text-xs text-[#10B981]"
-                                    >
-                                      {s}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">None</span>
-                                )}
-                              </div>
-                              <h4 className="mb-2 text-sm font-semibold">Missing skills</h4>
-                              <div className="flex flex-wrap gap-1">
-                                {item.missing_skills.length ? (
-                                  item.missing_skills.map((s) => (
-                                    <span
-                                      key={s}
-                                      className="rounded-full bg-[#fef2f2] px-2 py-0.5 text-xs text-[#EF4444]/80"
-                                    >
-                                      {s}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">None</span>
-                                )}
-                              </div>
-                            </div>
+                            <CandidateSkillsPanel item={item} isContextual={rowContextual} />
                           </div>
                           {item.top_matching_chunks?.length > 0 && (
                             <div className="mt-4">
@@ -398,7 +544,7 @@ export default function RankingsPage() {
           </Table>
         </div>
 
-        {!loading && items.length === 0 && (
+        {!loading && !tableLoading && items.length === 0 && (
           <p className="mt-6 text-center text-muted-foreground">
             No rankings yet. Run indexing and ranking from the job page.
           </p>

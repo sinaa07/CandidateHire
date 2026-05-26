@@ -148,3 +148,60 @@ def get_available_providers() -> list[str]:
     if os.getenv("ANTHROPIC_API_KEY"):
         providers.append("anthropic")
     return providers
+
+
+class LLMService:
+    """Non-streaming LLM completion helper."""
+
+    ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
+    OPENAI_MODEL = "gpt-4o-mini"
+
+    @staticmethod
+    def _select_provider() -> tuple[str, str]:
+        if os.getenv("ANTHROPIC_API_KEY"):
+            return "anthropic", LLMService.ANTHROPIC_MODEL
+        if os.getenv("OPENAI_API_KEY"):
+            return "openai", LLMService.OPENAI_MODEL
+        raise ValueError("No LLM API key configured")
+
+    @staticmethod
+    async def complete(
+        prompt: str,
+        *,
+        max_tokens: int = 2000,
+        temperature: float = 0.1,
+    ) -> tuple[str, str]:
+        """Return (response_text, model_name)."""
+        import asyncio
+
+        provider, model_name = LLMService._select_provider()
+
+        if provider == "anthropic":
+            client = _get_anthropic_client()
+            if client is None:
+                raise ValueError("No LLM API key configured")
+
+            def _sync_anthropic() -> str:
+                message = client.messages.create(
+                    model=model_name,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return message.content[0].text
+
+            text = await asyncio.to_thread(_sync_anthropic)
+            return text, model_name
+
+        client = _get_openai_client()
+        if client is None:
+            raise ValueError("No LLM API key configured")
+
+        response = await client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        content = response.choices[0].message.content or ""
+        return content, model_name

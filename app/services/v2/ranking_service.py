@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.models.tables import CandidateIndex, Job, Ranking, _default_ranking_config
 from app.services.v2.indexing_service import _run_ner_chunked
+from app.services.v2.skill_coverage_service import apply_implied_by_map, load_skill_implied_by_map
 from app.utils.chunker import chunk_text
 from app.utils.model_cache import ModelCache
 from app.utils.skill_normalizer import SkillNormalizer
@@ -65,6 +66,9 @@ def _score_candidate(
     jd_skills: set[str],
     weights: dict[str, float],
     hard_filters: dict[str, float],
+    *,
+    ranking_mode: str = "keyword",
+    implied_by_map: dict | None = None,
 ) -> dict[str, Any] | None:
     emb_path = idx_record.chunk_embeddings_path
     if not emb_path or not os.path.exists(emb_path):
@@ -92,12 +96,43 @@ def _score_candidate(
         if i < len(chunk_texts)
     ]
 
-    candidate_skills = set(idx_record.normalized_skills or [])
-    intersection = candidate_skills & jd_skills
-    union = candidate_skills | jd_skills
-    skill_score = len(intersection) / len(union) if union else 0.0
-    matched_skills = sorted(intersection)
-    missing_skills = sorted(jd_skills - candidate_skills)
+    implied_by_map = implied_by_map or {}
+
+    if ranking_mode == "contextual":
+        candidate_skills = {
+            s.lower().strip() for s in (idx_record.normalized_skills or []) if s
+        }
+        jd_skills_lower = {s.lower().strip() for s in jd_skills if s}
+
+        intersection = candidate_skills & jd_skills_lower
+        missing_raw = sorted(jd_skills_lower - candidate_skills)
+        matched_skills = sorted(intersection)
+
+        truly_missing, likely_covered = apply_implied_by_map(
+            missing_skills=missing_raw,
+            matched_skills=matched_skills,
+            candidate_all_skills=list(candidate_skills),
+            implied_by_map=implied_by_map,
+        )
+
+        effective_matches = len(intersection) + (len(likely_covered) * 0.6)
+        skill_score = (
+            effective_matches / len(jd_skills_lower) if jd_skills_lower else 0.0
+        )
+        skill_score = min(skill_score, 1.0)
+
+        missing_skills = missing_raw
+        truly_missing_skills = truly_missing
+        likely_covered_skills = likely_covered
+    else:
+        candidate_skills = set(idx_record.normalized_skills or [])
+        intersection = candidate_skills & jd_skills
+        union = candidate_skills | jd_skills
+        skill_score = len(intersection) / len(union) if union else 0.0
+        matched_skills = sorted(intersection)
+        missing_skills = sorted(jd_skills - candidate_skills)
+        truly_missing_skills = missing_skills
+        likely_covered_skills = []
 
     years = float(idx_record.total_experience_years or 0)
     log_score = min(math.log1p(years) / math.log1p(15), 1.0)
@@ -138,6 +173,9 @@ def _score_candidate(
         "final_score": round(final_score, 4),
         "matched_skills": matched_skills,
         "missing_skills": missing_skills,
+        "truly_missing_skills": truly_missing_skills,
+        "likely_covered_skills": likely_covered_skills,
+        "ranking_mode_used": ranking_mode,
         "top_matching_chunks": top_matching_chunks,
         "total_experience_years": round(years, 1),
         "education_tier": idx_record.education_tier,
@@ -150,6 +188,7 @@ async def rank_job(
     company_id: str,
     config_override: dict | None = None,
     db: Session | None = None,
+    ranking_mode_override: str | None = None,
 ) -> dict[str, Any]:
     if db is None:
         raise ValueError("db session is required")
@@ -162,6 +201,19 @@ async def rank_job(
     ).scalar_one_or_none()
     if job is None:
         raise ValueError("Job not found")
+
+    ranking_mode = ranking_mode_override or job.ranking_mode or "keyword"
+    implied_by_map: dict = {}
+
+    if ranking_mode == "contextual":
+        implied_by_map = load_skill_implied_by_map(job)
+        if not implied_by_map:
+            ranking_mode = "keyword"
+            logger.warning(
+                "Job %s: contextual mode requested but skill map not ready, "
+                "falling back to keyword",
+                job_id,
+            )
 
     config = copy.deepcopy(job.ranking_config or _default_ranking_config())
     config = _apply_config_override(config, config_override)
@@ -186,6 +238,9 @@ async def rank_job(
     jd_embeddings = np.asarray(jd_embeddings)
 
     jd_skills = _extract_jd_skills(jd_text)
+    if ranking_mode == "contextual" and implied_by_map:
+        # Use LLM skill-map keys so implied-by lookups align with missing_skills
+        jd_skills = {s.lower().strip() for s in implied_by_map if s}
 
     index_records = db.execute(
         select(CandidateIndex).where(CandidateIndex.job_id == job_uuid)
@@ -196,7 +251,15 @@ async def rank_job(
 
     results: list[dict[str, Any]] = []
     for idx_record in index_records:
-        scored = _score_candidate(idx_record, jd_embeddings, jd_skills, weights, hard_filters)
+        scored = _score_candidate(
+            idx_record,
+            jd_embeddings,
+            jd_skills,
+            weights,
+            hard_filters,
+            ranking_mode=ranking_mode,
+            implied_by_map=implied_by_map,
+        )
         if scored is not None:
             results.append(scored)
 
@@ -224,6 +287,9 @@ async def rank_job(
                 top_matching_chunks=row["top_matching_chunks"],
                 matched_skills=row["matched_skills"],
                 missing_skills=row["missing_skills"],
+                truly_missing_skills=row["truly_missing_skills"],
+                likely_covered_skills=row["likely_covered_skills"],
+                ranking_mode_used=row["ranking_mode_used"],
                 rank_position=row["rank_position"],
                 passed_hard_filter=row["passed_hard_filter"],
                 scoring_config_snapshot=config,

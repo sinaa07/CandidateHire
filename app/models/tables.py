@@ -56,6 +56,7 @@ class Company(Base):
         nullable=False,
         default=lambda: str(uuid.uuid4()),
     )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -67,6 +68,31 @@ class Company(Base):
         back_populates="company",
         cascade="all, delete-orphan",
     )
+    users: Mapped[list["User"]] = relationship(
+        back_populates="company",
+        cascade="all, delete-orphan",
+    )
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=_uuid)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    company: Mapped["Company"] = relationship(back_populates="users")
 
 
 class Job(Base):
@@ -87,6 +113,14 @@ class Job(Base):
         JSON,
         default=_default_ranking_config,
     )
+    ranking_mode: Mapped[str] = mapped_column(String(32), default="keyword", nullable=False)
+    skill_implied_by_map_path: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    skill_map_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    skill_map_built_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    skill_map_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -202,6 +236,9 @@ class Ranking(Base):
     top_matching_chunks: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
     matched_skills: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
     missing_skills: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
+    truly_missing_skills: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
+    likely_covered_skills: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
+    ranking_mode_used: Mapped[str | None] = mapped_column(String(32), nullable=True)
     rank_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
     passed_hard_filter: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     scoring_config_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)

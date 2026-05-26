@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
+import { Loader2 } from "lucide-react"
 import { V2Nav } from "@/components/v2/V2Nav"
 import { StatCard } from "@/components/v2/StatCard"
 import { StatusBadge } from "@/components/v2/StatusBadge"
@@ -10,7 +11,35 @@ import { Button } from "@/components/ui/button"
 import { CompanyCredentialsSetup } from "@/components/v2/CompanyCredentialsSetup"
 import { getDashboard } from "@/utils/api.v2"
 import { getApiKey, getCompanyId } from "@/utils/companyId"
-import type { DashboardResponse } from "@/types/v2"
+import type { DashboardResponse, JobSummary } from "@/types/v2"
+
+function RankingModeBadge({ job }: { job: JobSummary }) {
+  const mode = job.ranking_mode || "keyword"
+  const mapStatus = job.skill_map_status
+
+  if (mapStatus === "building") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        ★ Building...
+      </span>
+    )
+  }
+
+  if (mode === "contextual") {
+    return (
+      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+        ★ Contextual
+      </span>
+    )
+  }
+
+  return (
+    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+      Keyword
+    </span>
+  )
+}
 
 export function DashboardView() {
   const [companyId, setCompanyId] = useState("")
@@ -103,6 +132,7 @@ export function DashboardView() {
                       )}
                     </div>
                     <div className="flex flex-wrap gap-2">
+                      <RankingModeBadge job={job} />
                       <StatusBadge status={job.status} />
                       <StatusBadge status={job.pipeline_stage} />
                     </div>

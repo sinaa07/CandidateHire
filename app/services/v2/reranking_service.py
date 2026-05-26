@@ -52,6 +52,9 @@ def rerank(job_id: str, new_weights: dict[str, float], db: Session) -> list[dict
                 },
                 "matched_skills": ranking.matched_skills or [],
                 "missing_skills": ranking.missing_skills or [],
+                "truly_missing_skills": ranking.truly_missing_skills,
+                "likely_covered_skills": ranking.likely_covered_skills,
+                "ranking_mode_used": ranking.ranking_mode_used,
                 "rank_position": 0,
             }
         )

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,7 @@ from app.api.routes.v2.helpers import (
     jobs_to_read_list,
     merge_ranking_config,
 )
+from app.services.v2.skill_coverage_service import run_build_skill_implied_by_map_task
 from app.utils.text_extraction import extract_text
 
 router = APIRouter(
@@ -58,11 +59,13 @@ async def _save_jd_file(
 @router.post("/", response_model=JobRead, status_code=201)
 async def create_job(
     company_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     title: str = Form(...),
     department: str | None = Form(None),
     status: str = Form("open"),
     jd_text: str | None = Form(None),
     ranking_config: str | None = Form(None),
+    ranking_mode: str = Form("keyword"),
     jd_file: UploadFile | None = File(None),
     db: Session = Depends(get_db),
 ) -> JobRead:
@@ -89,6 +92,7 @@ async def create_job(
         status=status,
         jd_text=jd_text_value,
         ranking_config=merge_ranking_config(parsed_config),
+        ranking_mode=ranking_mode,
     )
     db.add(job)
     db.flush()
@@ -112,6 +116,14 @@ async def create_job(
 
     db.commit()
     db.refresh(job)
+
+    if ranking_mode == "contextual" and job.jd_text:
+        background_tasks.add_task(
+            run_build_skill_implied_by_map_task,
+            str(job.id),
+            str(company_id),
+        )
+
     return job_to_read(db, job)
 
 
@@ -140,10 +152,12 @@ def update_job(
     company_id: uuid.UUID,
     job_id: uuid.UUID,
     body: JobUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> JobRead:
     job = _get_job_or_404(db, company_id, job_id)
 
+    old_ranking_mode = job.ranking_mode or "keyword"
     updates = body.model_dump(exclude_unset=True)
     if "ranking_config" in updates and updates["ranking_config"] is not None:
         updates["ranking_config"] = merge_ranking_config(updates["ranking_config"])
@@ -153,6 +167,16 @@ def update_job(
     for field, value in updates.items():
         setattr(job, field, value)
     job.updated_at = datetime.now(timezone.utc)
+
+    new_ranking_mode = job.ranking_mode or "keyword"
+    if "ranking_mode" in updates:
+        if old_ranking_mode != "contextual" and new_ranking_mode == "contextual":
+            if job.skill_map_status != "ready":
+                background_tasks.add_task(
+                    run_build_skill_implied_by_map_task,
+                    str(job_id),
+                    str(company_id),
+                )
 
     db.commit()
     db.refresh(job)

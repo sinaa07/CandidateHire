@@ -33,6 +33,7 @@ class JobCreate(BaseModel):
     department: str | None = None
     status: str = "open"
     ranking_config: dict[str, Any] | None = None
+    ranking_mode: str = "keyword"
 
     @model_validator(mode="after")
     def jd_source_present(self):
@@ -61,6 +62,9 @@ class JobRead(BaseModel):
     top_score: float | None = None
     pipeline_stage: str = "uploaded"
     last_ranked_at: datetime | None = None
+    ranking_mode: str = "keyword"
+    skill_map_status: str = "pending"
+    skill_map_built_at: datetime | None = None
 
 
 class JobUpdate(BaseModel):
@@ -70,6 +74,7 @@ class JobUpdate(BaseModel):
     jd_text: str | None = None
     jd_file_path: str | None = None
     ranking_config: dict[str, Any] | None = None
+    ranking_mode: str | None = None
 
 
 class CandidateRead(BaseModel):
@@ -103,10 +108,23 @@ class RankingResult(BaseModel):
     score_breakdown: ScoreBreakdown
     matched_skills: list[Any] | None = None
     missing_skills: list[Any] | None = None
+    truly_missing_skills: list[Any] | None = None
+    likely_covered_skills: list[dict[str, Any]] | None = None
+    ranking_mode_used: str | None = None
     top_matching_chunks: list[Any] | None = None
     passed_hard_filter: bool
     rank_position: int | None = None
     ranked_at: datetime
+
+
+class SkillMapStatus(BaseModel):
+    job_id: str
+    ranking_mode: str
+    status: str
+    built_at: datetime | None = None
+    error: str | None = None
+    skill_count: int | None = None
+    implied_skills_total: int | None = None
 
 
 class CompanySummary(BaseModel):
@@ -132,6 +150,8 @@ class JobSummary(BaseModel):
     top_score: float | None = None
     pipeline_stage: str = "uploaded"
     last_ranked_at: datetime | None = None
+    ranking_mode: str = "keyword"
+    skill_map_status: str = "pending"
 
 
 class DashboardCompany(BaseModel):

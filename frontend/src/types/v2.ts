@@ -7,6 +7,9 @@ export interface CompanyRead {
   settings: Record<string, unknown>
 }
 
+export type RankingMode = "keyword" | "contextual"
+export type SkillMapStatusValue = "pending" | "building" | "ready" | "failed"
+
 export interface JobSummary {
   id: string
   title: string
@@ -19,6 +22,8 @@ export interface JobSummary {
   top_score: number | null
   pipeline_stage: string
   last_ranked_at: string | null
+  ranking_mode?: RankingMode | string
+  skill_map_status?: SkillMapStatusValue | string
 }
 
 export interface JobRead extends JobSummary {
@@ -26,6 +31,7 @@ export interface JobRead extends JobSummary {
   jd_text: string | null
   jd_file_path: string | null
   ranking_config: RankingConfig
+  skill_map_built_at?: string | null
 }
 
 export interface RankingConfig {
@@ -103,6 +109,28 @@ export interface MatchingChunk {
   section?: string
 }
 
+export interface LikelyCoveredSkill {
+  skill: string
+  covered_by: string[]
+}
+
+export interface SkillMapStatusResponse {
+  job_id: string
+  ranking_mode: string
+  status: SkillMapStatusValue
+  built_at: string | null
+  error: string | null
+  skill_count: number | null
+  implied_skills_total: number | null
+}
+
+export interface SkillMapResponse {
+  job_id: string
+  built_at: string | null
+  model_used: string | null
+  skill_implied_by_map: Record<string, string[]>
+}
+
 export interface RankingListItem {
   candidate_id: string
   filename: string
@@ -116,6 +144,9 @@ export interface RankingListItem {
   }
   matched_skills: string[]
   missing_skills: string[]
+  truly_missing_skills?: string[] | null
+  likely_covered_skills?: LikelyCoveredSkill[] | null
+  ranking_mode_used?: string | null
   top_matching_chunks: MatchingChunk[]
   passed_hard_filter: boolean
   ranked_at: string
@@ -139,5 +170,8 @@ export interface RerankResult {
   }
   matched_skills: string[]
   missing_skills: string[]
+  truly_missing_skills?: string[] | null
+  likely_covered_skills?: LikelyCoveredSkill[] | null
+  ranking_mode_used?: string | null
   rank_position: number
 }

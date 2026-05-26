@@ -45,3 +45,9 @@ langchain>=0.1.0
 spacy>=3.7.0
 # Environment variables
 python-dotenv>=1.0.0
+pydantic-settings>=2.0.0
+# Authentication
+passlib[bcrypt]==1.7.4
+bcrypt>=4.0.0,<5.0.0
+python-jose[cryptography]==3.3.0
+email-validator==2.1.0

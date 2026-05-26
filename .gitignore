@@ -3,5 +3,7 @@ __pycache__/
 storage/
 *.md
 .env
+.env.*
+!.env.example
 sample ui/
 docs/
